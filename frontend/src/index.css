@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Lexend', 'Noto Sans', 'Segoe UI', sans-serif;
+    background: #f0f4fb;
+    color: #0d1f3c;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c2d0ed; border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: #7a93bb; }
+}
+
+@layer components {
+  /* ── Sidebar ── */
+  .sidebar-gradient {
+    background: linear-gradient(180deg, #051f4a 0%, #072d6b 50%, #051f4a 100%);
+  }
+
+  /* ── KPI accent bar ── */
+  .kpi-bar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 10px 10px 0 0;
+  }
+
+  /* ── Animated progress bar ── */
+  .prog-fill {
+    animation: growWidth 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+  @keyframes growWidth {
+    from { width: 0; }
+    to   { width: var(--target-w); }
+  }
+
+  /* ── Heatmap cell ── */
+  .hm-cell {
+    @apply flex items-center justify-center rounded-lg font-mono text-[9px] cursor-default transition-all duration-150;
+    height: 32px;
+  }
+  .hm-cell:hover { transform: scale(1.08); box-shadow: 0 0 0 2px #f5c518; }
+
+  /* ── Badge ── */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold font-mono whitespace-nowrap;
+  }
+
+  /* ── Table row hover ── */
+  .tbl-row { @apply transition-colors duration-100; }
+  .tbl-row:hover td { @apply bg-blue-50/60; }
+
+  /* ── Toast ── */
+  .toast-enter { animation: toastSlide 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+  @keyframes toastSlide {
+    from { opacity: 0; transform: translateY(16px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* ── Modal ── */
+  .modal-enter { animation: modalPop 0.22s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+  @keyframes modalPop {
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  /* ── Nav item ── */
+  .nav-link {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg mx-2 text-[13px] font-medium text-white/50 cursor-pointer transition-all duration-150 relative;
+  }
+  .nav-link:hover  { @apply text-white/90 bg-white/5; }
+  .nav-link.active { @apply text-gold font-semibold bg-gold/10 text-[#f5c518]; }
+  .nav-link.active::before {
+    content: '';
+    position: absolute; left: -8px; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 20px;
+    background: #f5c518; border-radius: 0 3px 3px 0;
+  }
+
+  /* ── Chart card ── */
+  .chart-card {
+    @apply bg-white rounded-2xl border border-blue-100 shadow-card overflow-hidden;
+  }
+
+  /* ── Input field ── */
+  .field {
+    @apply w-full bg-white border border-slate-200 text-slate-800 rounded-lg px-3 py-2.5 text-[13px]
+           outline-none transition-all duration-150 font-sans placeholder-slate-400;
+  }
+  .field:focus { @apply border-psu ring-1 ring-psu/20; }
+
+  /* ── Btn primary ── */
+  .btn-primary {
+    @apply bg-psu text-white font-semibold text-[13px] px-4 py-2.5 rounded-lg
+           transition-all duration-150 shadow-sm hover:bg-psu-mid active:scale-[0.98];
+  }
+  .btn-gold {
+    @apply bg-gold text-psu-deep font-bold text-[13px] px-4 py-2.5 rounded-lg
+           transition-all duration-150 shadow-gold hover:bg-gold-light active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply border border-slate-200 bg-slate-50 text-slate-600 font-medium text-[13px] px-4 py-2.5 rounded-lg
+           transition-all duration-150 hover:border-psu hover:text-psu hover:bg-blue-50 active:scale-[0.98];
+  }
+}

@@ -1,0 +1,46 @@
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        {/* Data Import / Export */}
+        <Card>
+          <CardHead title="Data Import / Export" />
+          <div className="p-5 space-y-4">
+            <div
+              onClick={handleImport}
+              className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer
+                         hover:border-psu hover:bg-blue-50/40 transition-all duration-200 group">
+              <div className="text-3xl mb-3">{importing ? '⏳' : '📥'}</div>
+              <p className="text-[13px] font-semibold text-slate-600 group-hover:text-psu transition-colors">
+                {importing ? 'Importing…' : 'Drop file here or click to import'}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-1">Supports .xlsx, .csv, .json — max 20MB</p>
+            </div>
+            <div className="flex gap-2">
+              <button className="btn-primary flex items-center gap-2" onClick={() => toast('All data exported!','success')}>📤 Export All</button>
+              <button className="btn-ghost flex items-center gap-2"   onClick={() => toast('Template downloaded!','success')}>📥 Template</button>
+            </div>
+          </div>
+        </Card>
+
+        {/* Backup & Restore */}
+        <Card>
+          <CardHead title="Backup & Restore" />
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Last Backup</label>
+              <div className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                <span className="text-emerald-600 text-lg">✓</span>
+                <span className="text-[12px] font-semibold text-emerald-700">February 18, 2025 · 06:00 AM</span>
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Backup Schedule</label>
+              <select className="field" value={schedule} onChange={e => setSchedule(e.target.value)}>
+                {['Daily at 6:00 AM','Weekly','Manual Only'].map(v => <option key={v}>{v}</option>)}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button className="btn-primary flex items-center gap-2"  onClick={() => toast('Backup created!','success')}>💾 Create Backup</button>
+              <button className="btn-ghost flex items-center gap-2"    onClick={() => toast('Restore initiated…','info')}>🔄 Restore</button>
+            </div>
+          </div>
+        </Card>
+      </div>
