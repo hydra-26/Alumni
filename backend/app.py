@@ -16,8 +16,9 @@ app = Flask(__name__)
 CORS(app, origins=[
     "http://localhost:5173",
     "http://localhost:3000",
-    "https://alumni-blush-alpha.vercel.app"  # replace with your actual Vercel URL later
-])
+    "https://alumni-blush-alpha.vercel.app",  # replace with your actual Vercel URL later
+    "https://alumni-3rlfp1lk8-hydra-26s-projects.vercel.app"
+], supports_credentials=True)
 
 # Register blueprints
 app.register_blueprint(auth_bp,      url_prefix="/api/auth")
