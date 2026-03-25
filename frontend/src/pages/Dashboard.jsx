@@ -44,8 +44,8 @@ export default function Dashboard() {
   useEffect(() => {
     Promise.all([
       api.get('/analytics/kpis').catch(() => ({ data: { total_alumni: 0, total_projects: 0, employment_rate: 0, award_winning: 0, implemented_rate: 0 } })),
-      api.get('/alumni').catch(() => ({ data: [] })),
-      api.get('/projects').catch(() => ({ data: [] })),
+      api.get('/alumni/').catch(() => ({ data: [] })),
+      api.get('/projects/').catch(() => ({ data: [] })),
       api.get('/analytics/projects-per-year').catch(() => ({ data: {} })),
       api.get('/analytics/categories').catch(() => ({ data: {} })),
       api.get('/analytics/employment-trend').catch(() => ({ data: {} })),

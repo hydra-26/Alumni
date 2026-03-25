@@ -38,7 +38,7 @@ export default function AlumniPage() {
     if (search)       params.q      = search
     setLoading(true)
     try {
-      const r = await api.get('/alumni', { params })
+      const r = await api.get('/alumni/', { params })
       setRows(r.data || [])
     } catch {
       setRows([])
@@ -75,7 +75,7 @@ export default function AlumniPage() {
         await api.put(`/alumni/${editing.id}`, form)
         toast('Alumni record updated!', 'success')
       } else {
-        await api.post('/alumni', form)
+        await api.post('/alumni/', form)
         toast('Alumni record added!', 'success')
       }
       setModal(false)

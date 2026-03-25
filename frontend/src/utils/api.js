@@ -15,10 +15,9 @@
 
 import axios from 'axios'
 
-// Use the Render URL if available, otherwise fallback to local /api
-const api = axios.create({ 
-  baseURL: import.meta.env.VITE_API_URL || 'https://alumni-rxma.onrender.com/api/' 
-})
+// Use env API URL when set; fallback keeps existing Render API.
+const apiBase = (import.meta.env.VITE_API_URL || 'https://alumni-rxma.onrender.com/api').replace(/\/+$/, '')
+const api = axios.create({ baseURL: apiBase })
 
 // Attach user info from localStorage for audit context
 api.interceptors.request.use(cfg => {

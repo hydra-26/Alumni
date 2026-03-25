@@ -13,6 +13,7 @@ from routes.analytics import analytics_bp
 load_dotenv()
 
 app = Flask(__name__)
+app.url_map.strict_slashes = False
 
 # Use FRONTEND_ORIGINS for explicit domains and allow Vercel preview domains.
 # Example: FRONTEND_ORIGINS=https://your-prod.vercel.app,https://your-custom-domain.com

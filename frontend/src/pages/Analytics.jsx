@@ -27,8 +27,8 @@ export default function Analytics() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/alumni').catch(() => ({ data: [] })),
-      api.get('/projects').catch(() => ({ data: [] })),
+      api.get('/alumni/').catch(() => ({ data: [] })),
+      api.get('/projects/').catch(() => ({ data: [] })),
       api.get('/analytics/kpis').catch(() => ({ data: { total_alumni: 0, total_projects: 0, employment_rate: 0, award_winning: 0, implemented_rate: 0 } })),
     ]).then(([a, p, k]) => {
       setAlumni(a.data || [])

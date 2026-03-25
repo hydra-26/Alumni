@@ -40,7 +40,7 @@ export default function UsersPage() {
     if (search)     params.q    = search
     setLoading(true)
     try {
-      const r = await api.get('/users', { params })
+      const r = await api.get('/users/', { params })
       setRows(r.data || [])
     } catch {
       setRows([])
@@ -63,7 +63,7 @@ export default function UsersPage() {
         await api.put(`/users/${editing.id}`, form)
         toast('User updated!', 'success')
       } else {
-        await api.post('/users', form)
+        await api.post('/users/', form)
         toast('User created!', 'success')
       }
       setModal(false)

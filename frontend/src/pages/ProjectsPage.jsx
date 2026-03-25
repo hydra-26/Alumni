@@ -39,7 +39,7 @@ export default function ProjectsPage() {
     if (search)       params.q        = search
     setLoading(true)
     try {
-      const r = await api.get('/projects', { params })
+      const r = await api.get('/projects/', { params })
       setRows(r.data || [])
     } catch {
       setRows([])
@@ -76,7 +76,7 @@ export default function ProjectsPage() {
         await api.put(`/projects/${editing.id}`, form)
         toast('Project updated!', 'success')
       } else {
-        await api.post('/projects', form)
+        await api.post('/projects/', form)
         toast('Project saved!', 'success')
       }
       setModal(false)
