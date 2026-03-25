@@ -4,7 +4,7 @@ from supabase_client import get_supabase
 auth_bp = Blueprint("auth", __name__)
 
 
-@auth_bp.post("/login")
+@auth_bp.post("/login", methods=['POST'])
 def login():
     data = request.get_json()
     email = data.get("email", "").strip()
