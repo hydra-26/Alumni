@@ -1,5 +1,6 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from supabase_client import get_supabase
+from audit import log_audit
 
 analytics_bp = Blueprint("analytics", __name__)
 
@@ -80,3 +81,13 @@ def audit_logs():
     sb = get_supabase()
     result = sb.table("audit_logs").select("*").order("created_at", desc=True).limit(50).execute()
     return jsonify(result.data or [])
+
+
+@analytics_bp.post("/audit-logs")
+def create_audit_log():
+    data = request.get_json(silent=True) or {}
+    action = (data.get("action") or "").strip()
+    if not action:
+        return jsonify({"error": "Action is required"}), 400
+    log_audit(action, actor=data.get("actor"), color=data.get("color"))
+    return jsonify({"status": "ok"})

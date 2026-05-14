@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
 from dotenv import load_dotenv
+from pathlib import Path
 import os
 import re
 
@@ -10,7 +11,8 @@ from routes.projects import projects_bp
 from routes.users import users_bp
 from routes.analytics import analytics_bp
 
-load_dotenv()
+env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False

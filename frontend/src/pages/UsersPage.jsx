@@ -6,7 +6,39 @@ import {
   StatusBadge, Card, Modal, FormGroup, FormRow, DeleteModal, Pagination
 } from '../components/ui'
 
-const EMPTY = { first_name:'', last_name:'', username:'', email:'', role:'OSAA Dean', password:'' }
+const EMPTY = { first_name:'', last_name:'', username:'', email:'', role:'Chairperson', password:'' }
+
+const PASSWORD_LENGTH = 8
+const PASSWORD_SETS = {
+  upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  lower: 'abcdefghijklmnopqrstuvwxyz',
+  number: '0123456789',
+  special: '!@#$%^&*?'
+}
+
+const pickChar = (chars) => chars[Math.floor(Math.random() * chars.length)]
+
+const shuffle = (arr) => {
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
+}
+
+const generatePassword = () => {
+  const chars = [
+    pickChar(PASSWORD_SETS.upper),
+    pickChar(PASSWORD_SETS.lower),
+    pickChar(PASSWORD_SETS.number),
+    pickChar(PASSWORD_SETS.special)
+  ]
+  const all = `${PASSWORD_SETS.upper}${PASSWORD_SETS.lower}${PASSWORD_SETS.number}${PASSWORD_SETS.special}`
+  while (chars.length < PASSWORD_LENGTH) {
+    chars.push(pickChar(all))
+  }
+  return shuffle(chars).join('')
+}
 
 function Avatar({ name, color }) {
   const initials = name.split(' ').map(n=>n[0]).slice(0,2).join('')
@@ -32,6 +64,7 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState(null)
   const [form, setForm]   = useState(EMPTY)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const PER_PAGE = 8
 
   const load = async () => {
@@ -58,6 +91,8 @@ export default function UsersPage() {
   const openDetail = (r) => { setSelectedUser(r); setDetailModal(true) }
 
   const save = async () => {
+    if (saving) return
+    setSaving(true)
     try {
       if (editing) {
         await api.put(`/users/${editing.id}`, form)
@@ -69,6 +104,7 @@ export default function UsersPage() {
       setModal(false)
       await load()
     } catch { toast('Failed to save user.', 'error') }
+    finally { setSaving(false) }
   }
 
   const del = async () => {
@@ -97,6 +133,7 @@ export default function UsersPage() {
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
   const F = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
+  const handleGeneratePassword = () => setForm(f => ({ ...f, password: generatePassword() }))
 
   return (
     <div className="animate-fade-up">
@@ -177,14 +214,16 @@ export default function UsersPage() {
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Edit User' : 'Add User'}
         footer={<>
           <button className="btn-ghost" onClick={() => setModal(false)}>Cancel</button>
-          <button className="btn-primary" onClick={save}>{editing ? 'Update' : 'Create'} User</button>
+          <button className="btn-primary" onClick={save} disabled={saving}>
+            {saving ? (editing ? 'Updating...' : 'Creating...') : `${editing ? 'Update' : 'Create'} User`}
+          </button>
         </>}>
         <FormRow>
           <FormGroup label="First Name"><input className="field" value={form.first_name} onChange={F('first_name')} placeholder="First name" /></FormGroup>
           <FormGroup label="Last Name"><input className="field" value={form.last_name}  onChange={F('last_name')}  placeholder="Last name" /></FormGroup>
         </FormRow>
         <FormGroup label="Username"><input className="field" value={form.username} onChange={F('username')} placeholder="login.username" /></FormGroup>
-        <FormGroup label="Email"><input className="field" type="email" value={form.email} onChange={F('email')} placeholder="user@psu.edu.ph" /></FormGroup>
+        <FormGroup label="Email"><input className="field" type="email" value={form.email} onChange={F('email')} placeholder="user@psu.edu.ph" disabled={!!editing} /></FormGroup>
         <FormGroup label="Role">
           <select className="field" value={form.role} onChange={F('role')}>
             <option>Chairperson</option>
@@ -193,7 +232,23 @@ export default function UsersPage() {
           </select>
         </FormGroup>
         <FormGroup label={editing ? 'New Password (leave blank to keep)' : 'Password'}>
-          <input className="field" type="password" value={form.password} onChange={F('password')} placeholder="••••••••" />
+          <div className="relative">
+            <input className="field pr-28" type="password" value={form.password} onChange={F('password')} placeholder="••••••••" disabled={!!editing} />
+            <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+              <button
+                type="button"
+                onClick={handleGeneratePassword}
+                disabled={!!editing}
+                className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md border transition-colors ${
+                  editing
+                    ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50'
+                    : 'border-blue-100 bg-blue-50 text-psu hover:bg-blue-100 hover:border-psu/30'
+                }`}
+              >
+                Generate
+              </button>
+            </div>
+          </div>
         </FormGroup>
       </Modal>
 

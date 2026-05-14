@@ -28,7 +28,6 @@ create table if not exists alumni (
   contact           text,
   employment_status text not null default 'Seeking' check (employment_status in ('Employed','Self-Employed','Seeking','Studying')),
   company           text,
-  skills            text,
   created_at        timestamptz not null default now()
 );
 

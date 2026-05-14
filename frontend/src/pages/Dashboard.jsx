@@ -1,7 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Chart, registerables } from 'chart.js'
+import html2canvas from 'html2canvas'
+import { jsPDF } from 'jspdf'
 import api from '../utils/api'
-import { KpiCard, Card, CardHead, SectionHead, ProgBar, Sel } from '../components/ui'
+import { logAudit } from '../utils/audit'
+import { KpiCard, Card, CardHead, SectionHead, Sel, Modal } from '../components/ui'
+import { useToast } from '../context/ToastContext'
 
 Chart.register(...registerables)
 Chart.defaults.font.family = "'Lexend', 'Noto Sans', 'Segoe UI', sans-serif"
@@ -25,6 +29,7 @@ const PROJ_BADGE = {
 }
 
 export default function Dashboard() {
+  const { toast } = useToast()
   const [kpis, setKpis]         = useState({ total_alumni: 0, total_projects: 0, employment_rate: 0, award_winning: 0, implemented_rate: 0 })
   const [alumni, setAlumni]     = useState([])
   const [projects, setProjects] = useState([])
@@ -34,12 +39,39 @@ export default function Dashboard() {
   const [employmentTrend, setEmploymentTrend] = useState({})
   const [yearFilter, setYearFilter] = useState('all')
   const [programFilter, setProgramFilter] = useState('all')
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportSel, setExportSel] = useState({
+    metrics: true,
+    projects: true,
+    categories: true,
+    employment: true,
+    recentAlumni: true,
+    recentProjects: true,
+  })
 
   // Chart refs
   const refProjects   = useRef(null)
   const refCategories = useRef(null)
   const refEmployment = useRef(null)
   const chartInstances = useRef({})
+
+  // Export capture refs
+  const refMetricsCard = useRef(null)
+  const refProjectsCard = useRef(null)
+  const refCategoriesCard = useRef(null)
+  const refEmploymentCard = useRef(null)
+  const refRecentAlumniCard = useRef(null)
+  const refRecentProjectsCard = useRef(null)
+
+  const exportItems = [
+    { key: 'metrics', label: 'Key Metrics', ref: refMetricsCard },
+    { key: 'projects', label: 'Projects Per Batch Year', ref: refProjectsCard },
+    { key: 'categories', label: 'Project Categories', ref: refCategoriesCard },
+    { key: 'employment', label: 'Employment Trend', ref: refEmploymentCard },
+    { key: 'recentAlumni', label: 'Recent Alumni', ref: refRecentAlumniCard },
+    { key: 'recentProjects', label: 'Recent Projects', ref: refRecentProjectsCard },
+  ]
 
   useEffect(() => {
     Promise.all([
@@ -68,6 +100,13 @@ export default function Dashboard() {
 
   const filteredProjects = useMemo(() => projects.filter(p => yearFilter === 'all' || p.year === yearFilter), [projects, yearFilter])
 
+  const availableYears = useMemo(() => {
+    const yearSet = new Set()
+    for (const p of projects) if (p.year) yearSet.add(p.year)
+    for (const a of alumni) if (a.batch_year) yearSet.add(a.batch_year)
+    return Array.from(yearSet).sort((a, b) => Number(a) - Number(b))
+  }, [projects, alumni])
+
   // Calculate filtered KPIs
   const displayKpis = useMemo(() => {
     const employed = filteredAlumni.filter(a => a.employment_status === 'Employed').length
@@ -88,15 +127,20 @@ export default function Dashboard() {
   }, [filteredAlumni, filteredProjects])
 
   // Calculate filtered chart data
-  const years = useMemo(() => {
+  const projectYears = useMemo(() => {
     const yearSet = new Set()
     for (const p of filteredProjects) if (p.year) yearSet.add(p.year)
+    return Array.from(yearSet).sort((a, b) => Number(a) - Number(b))
+  }, [filteredProjects])
+
+  const alumniYears = useMemo(() => {
+    const yearSet = new Set()
     for (const a of filteredAlumni) if (a.batch_year) yearSet.add(a.batch_year)
     return Array.from(yearSet).sort((a, b) => Number(a) - Number(b))
-  }, [filteredProjects, filteredAlumni])
+  }, [filteredAlumni])
 
-  const totalsByYear = useMemo(() => years.map(y => filteredProjects.filter(p => p.year === y).length), [years, filteredProjects])
-  const awardedByYear = useMemo(() => years.map(y => filteredProjects.filter(p => p.year === y && p.status === 'Awarded').length), [years, filteredProjects])
+  const totalsByYear = useMemo(() => projectYears.map(y => filteredProjects.filter(p => p.year === y).length), [projectYears, filteredProjects])
+  const awardedByYear = useMemo(() => projectYears.map(y => filteredProjects.filter(p => p.year === y && p.status === 'Awarded').length), [projectYears, filteredProjects])
 
   const categoryLabels = useMemo(() => {
     const cats = new Set()
@@ -105,41 +149,17 @@ export default function Dashboard() {
   }, [filteredProjects])
   const categoryValues = useMemo(() => categoryLabels.map(cat => filteredProjects.filter(p => p.category === cat).length), [categoryLabels, filteredProjects])
 
-  const trendYears = useMemo(() => {
-    const trendSet = new Set()
-    for (const p of filteredProjects) if (p.year) trendSet.add(p.year)
-    for (const a of filteredAlumni) if (a.batch_year) trendSet.add(a.batch_year)
-    return Array.from(trendSet).sort((a, b) => Number(a) - Number(b))
-  }, [filteredProjects, filteredAlumni])
-
-  const employedTrend = useMemo(() => trendYears.map(y => {
+  const employedTrend = useMemo(() => alumniYears.map(y => {
     const yearAlumni = filteredAlumni.filter(a => a.batch_year === y)
     const employed = yearAlumni.filter(a => a.employment_status === 'Employed').length
     return yearAlumni.length ? Math.round((employed / yearAlumni.length) * 100) : 0
-  }), [trendYears, filteredAlumni])
+  }), [alumniYears, filteredAlumni])
 
-  const selfEmpTrend = useMemo(() => trendYears.map(y => {
+  const selfEmpTrend = useMemo(() => alumniYears.map(y => {
     const yearAlumni = filteredAlumni.filter(a => a.batch_year === y)
     const selfEmp = yearAlumni.filter(a => a.employment_status === 'Self-Employed').length
     return yearAlumni.length ? Math.round((selfEmp / yearAlumni.length) * 100) : 0
-  }), [trendYears, filteredAlumni])
-
-  const parsedSkills = useMemo(() => {
-    const counts = {}
-    for (const a of filteredAlumni) {
-      const raw = (a.skills || '').split(',').map(s => s.trim()).filter(Boolean)
-      for (const s of raw) counts[s] = (counts[s] || 0) + 1
-    }
-    const total = filteredAlumni.length || 1
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, count], idx) => ({
-        name,
-        pct: Math.round((count / total) * 100),
-        color: [PSU, '#6b3fa0', '#0077b6', '#0d8a5e', GOLD][idx % 5],
-      }))
-  }, [filteredAlumni])
+  }), [alumniYears, filteredAlumni])
 
   useEffect(() => {
     const destroy = (key) => { if (chartInstances.current[key]) { chartInstances.current[key].destroy(); delete chartInstances.current[key] } }
@@ -150,7 +170,7 @@ export default function Dashboard() {
       chartInstances.current.projects = new Chart(refProjects.current, {
         type: 'bar',
         data: {
-          labels: years,
+          labels: projectYears,
           datasets: [
             { label: 'Total Projects', data: totalsByYear, backgroundColor: 'rgba(10,61,143,0.75)', borderColor: PSU, borderWidth: 1.5, borderRadius: 5 },
             { label: 'Awarded',        data: awardedByYear,  backgroundColor: 'rgba(212,168,0,0.8)',  borderColor: GOLD, borderWidth: 1.5, borderRadius: 5 },
@@ -179,7 +199,7 @@ export default function Dashboard() {
       chartInstances.current.employment = new Chart(refEmployment.current, {
         type: 'line',
         data: {
-          labels: trendYears,
+          labels: alumniYears,
           datasets: [
             { label: 'Employed %',      data: employedTrend, borderColor: PSU,  backgroundColor: 'rgba(10,61,143,0.07)', tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: PSU,  borderWidth: 2.5 },
             { label: 'Self-Employed %', data: selfEmpTrend, borderColor: GOLD, backgroundColor: 'rgba(212,168,0,0.05)', tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: GOLD, borderWidth: 2.5 },
@@ -190,7 +210,7 @@ export default function Dashboard() {
     }
 
     return () => { Object.keys(chartInstances.current).forEach(destroy) }
-  }, [years, totalsByYear, awardedByYear, categoryLabels, categoryValues, trendYears, employedTrend, selfEmpTrend])
+  }, [projectYears, totalsByYear, awardedByYear, categoryLabels, categoryValues, alumniYears, employedTrend, selfEmpTrend])
 
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   const vals = months.map((_, i) => filteredProjects.filter(p => {
@@ -205,6 +225,59 @@ export default function Dashboard() {
 
   const yearLabel = yearFilter === 'all' ? 'All Years' : yearFilter
   const programLabel = programFilter === 'all' ? 'All Programs' : programFilter
+
+  const toggleExport = (key) => setExportSel(s => ({ ...s, [key]: !s[key] }))
+  const setAllExport = (value) => setExportSel(exportItems.reduce((acc, item) => {
+    acc[item.key] = value
+    return acc
+  }, {}))
+
+  const exportDashboardPdf = async () => {
+    const selected = exportItems.filter(item => exportSel[item.key])
+    if (!selected.length) {
+      toast('Select at least one item to export.', 'error')
+      return
+    }
+
+    const missing = selected.filter(item => !item.ref?.current)
+    if (missing.length) {
+      toast('Some items are not ready to export yet.', 'error')
+      return
+    }
+
+    setExporting(true)
+    try {
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const margin = 36
+
+      for (let i = 0; i < selected.length; i += 1) {
+        const node = selected[i].ref.current
+        const canvas = await html2canvas(node, { scale: 2, backgroundColor: '#ffffff' })
+        const imgData = canvas.toDataURL('image/png')
+        const maxWidth = pageWidth - margin * 2
+        const maxHeight = pageHeight - margin * 2
+        const ratio = Math.min(maxWidth / canvas.width, maxHeight / canvas.height)
+        const renderWidth = canvas.width * ratio
+        const renderHeight = canvas.height * ratio
+        const x = (pageWidth - renderWidth) / 2
+        const y = (pageHeight - renderHeight) / 2
+
+        if (i > 0) pdf.addPage()
+        pdf.addImage(imgData, 'PNG', x, y, renderWidth, renderHeight, undefined, 'FAST')
+      }
+
+      pdf.save(`dashboard-export-${Date.now()}.pdf`)
+      setExportOpen(false)
+      toast('PDF exported successfully.', 'success')
+      void logAudit('Export dashboard (PDF)', '#0d8a5e')
+    } catch (err) {
+      toast('Failed to export PDF.', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -278,48 +351,90 @@ export default function Dashboard() {
       <SectionHead title="Performance Overview" sub={`Academic Year ${yearLabel} · ${programLabel} · Real-time`}>
         <Sel value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
           <option value="all">All Years</option>
-          <option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
+          {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
         </Sel>
         <Sel value={programFilter} onChange={e => setProgramFilter(e.target.value)}>
           <option value="all">All Programs</option>
           <option value="BSIT">BSIT</option><option value="BSCS">BSCS</option><option value="BSIS">BSIS</option>
         </Sel>
+        <button className="btn-primary whitespace-nowrap" onClick={() => setExportOpen(true)} disabled={exporting}>
+          {exporting ? 'Exporting...' : 'Export PDF'}
+        </button>
       </SectionHead>
 
+      <Modal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        title="Export Dashboard Items"
+        footer={
+          <>
+            <button className="btn-ghost" onClick={() => setExportOpen(false)}>Cancel</button>
+            <button className="btn-primary" onClick={exportDashboardPdf} disabled={exporting}>
+              {exporting ? 'Exporting...' : 'Export PDF'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-[12px] text-slate-500 mb-4">Select items to include in the PDF export.</p>
+        <div className="space-y-2">
+          {exportItems.map(item => (
+            <label key={item.key} className="flex items-center gap-2.5 cursor-pointer group">
+              <div
+                onClick={() => toggleExport(item.key)}
+                className={`w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-all duration-150 cursor-pointer
+                  ${exportSel[item.key] ? 'bg-psu border-psu' : 'border-slate-300 bg-white group-hover:border-psu/50'}`}
+              >
+                {exportSel[item.key] && (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <polyline points="1.5,5 4,7.5 8.5,2" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                )}
+              </div>
+              <span className="text-[13px] text-slate-600">{item.label}</span>
+            </label>
+          ))}
+        </div>
+        <div className="flex gap-2 pt-3">
+          <button className="btn-ghost" onClick={() => setAllExport(true)}>Select all</button>
+          <button className="btn-ghost" onClick={() => setAllExport(false)}>Clear all</button>
+        </div>
+      </Modal>
+
       {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-        <KpiCard icon="🎓" label="Total Alumni"    value={displayKpis.total_alumni}                  trend="filtered" trendUp={false} color="blue" />
-        <KpiCard icon="📁" label="Total Projects"  value={displayKpis.total_projects}                trend="filtered" trendUp={false} color="gold" />
-        <KpiCard icon="💼" label="Employment Rate" value={`${displayKpis.employment_rate}%`}         trend="filtered" trendUp={false} color="green" />
-        <KpiCard icon="🏆" label="Award-Winning"   value={displayKpis.award_winning}                 trend="filtered" trendUp={false} color="violet" />
-        <KpiCard icon="🚀" label="Implemented"     value={`${displayKpis.implemented_rate}%`}        trend="filtered" trendUp={false} color="red" />
+      <div ref={refMetricsCard}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+          <KpiCard icon="🎓" label="Total Alumni"    value={displayKpis.total_alumni}                  trend="filtered" trendUp={false} color="blue" />
+          <KpiCard icon="📁" label="Total Projects"  value={displayKpis.total_projects}                trend="filtered" trendUp={false} color="gold" />
+          <KpiCard icon="💼" label="Employment Rate" value={`${displayKpis.employment_rate}%`}         trend="filtered" trendUp={false} color="green" />
+          <KpiCard icon="🏆" label="Award-Winning"   value={displayKpis.award_winning}                 trend="filtered" trendUp={false} color="violet" />
+          <KpiCard icon="🚀" label="Implemented"     value={`${displayKpis.implemented_rate}%`}        trend="filtered" trendUp={false} color="red" />
+        </div>
       </div>
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <Card>
-          <CardHead title="Projects Per Batch Year" sub="Annual submissions & awards" />
-          <div className="p-5"><div style={{ height: 240 }}><canvas ref={refProjects} /></div></div>
-        </Card>
-        <Card>
-          <CardHead title="Project Categories" sub="Distribution by type" />
-          <div className="p-5"><div style={{ height: 240 }}><canvas ref={refCategories} /></div></div>
-        </Card>
+        <div ref={refProjectsCard}>
+          <Card>
+            <CardHead title="Projects Per Batch Year" sub="Annual submissions & awards" />
+            <div className="p-5"><div style={{ height: 240 }}><canvas ref={refProjects} /></div></div>
+          </Card>
+        </div>
+        <div ref={refCategoriesCard}>
+          <Card>
+            <CardHead title="Project Categories" sub="Distribution by type" />
+            <div className="p-5"><div style={{ height: 240 }}><canvas ref={refCategories} /></div></div>
+          </Card>
+        </div>
       </div>
 
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <Card>
-          <CardHead title="Employment Trend" sub="Employed vs self-employed % by batch" />
-          <div className="p-5"><div style={{ height: 200 }}><canvas ref={refEmployment} /></div></div>
-        </Card>
-        <Card>
-          <CardHead title="Top Skills Applied" sub="Industry utilization rates" />
-          <div className="p-5 flex flex-col gap-4">
-            {parsedSkills.length === 0 && <div className="text-[12px] text-slate-400">No skills data available.</div>}
-            {parsedSkills.map(s => <ProgBar key={s.name} label={s.name} pct={s.pct} color={s.color} />)}
-          </div>
-        </Card>
+        <div ref={refEmploymentCard} className="lg:col-span-2">
+          <Card>
+            <CardHead title="Employment Trend" sub="Employed vs self-employed % by batch" />
+            <div className="p-5"><div style={{ height: 200 }}><canvas ref={refEmployment} /></div></div>
+          </Card>
+        </div>
       </div>
 
       {/* Heatmap */}
@@ -356,55 +471,59 @@ export default function Dashboard() {
       {/* Recent tables */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Recent Alumni */}
-        <Card>
-          <CardHead title="Recent Alumni" />
-          <table className="w-full">
-            <thead>
-              <tr className="bg-psu-deep">
-                {['Name','Batch','Status','Course'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-white/60 uppercase tracking-widest">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAlumni.slice(0, 5).length === 0 ? (
-                <tr><td colSpan={4} className="text-center py-10 text-slate-400 text-[13px]">No alumni match the selected filters.</td></tr>
-              ) : filteredAlumni.slice(0, 5).map(a => (
-                <tr key={a.id} className="tbl-row border-t border-slate-100">
-                  <td className="px-4 py-3 font-semibold text-slate-700 text-[13px]">{a.first_name} {a.last_name}</td>
-                  <td className="px-4 py-3 text-[12px] font-mono text-psu font-semibold">{a.batch_year}</td>
-                  <td className="px-4 py-3"><span className={`badge text-[10px] ${STATUS_BADGE[a.employment_status] || ''}`}>{a.employment_status}</span></td>
-                  <td className="px-4 py-3 text-[12px] text-slate-500">{a.course}</td>
+        <div ref={refRecentAlumniCard}>
+          <Card>
+            <CardHead title="Recent Alumni" />
+            <table className="w-full">
+              <thead>
+                <tr className="bg-psu-deep">
+                  {['Name','Batch','Status','Course'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-white/60 uppercase tracking-widest">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+              </thead>
+              <tbody>
+                {filteredAlumni.slice(0, 5).length === 0 ? (
+                  <tr><td colSpan={4} className="text-center py-10 text-slate-400 text-[13px]">No alumni match the selected filters.</td></tr>
+                ) : filteredAlumni.slice(0, 5).map(a => (
+                  <tr key={a.id} className="tbl-row border-t border-slate-100">
+                    <td className="px-4 py-3 font-semibold text-slate-700 text-[13px]">{a.first_name} {a.last_name}</td>
+                    <td className="px-4 py-3 text-[12px] font-mono text-psu font-semibold">{a.batch_year}</td>
+                    <td className="px-4 py-3"><span className={`badge text-[10px] ${STATUS_BADGE[a.employment_status] || ''}`}>{a.employment_status}</span></td>
+                    <td className="px-4 py-3 text-[12px] text-slate-500">{a.course}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </div>
 
         {/* Recent Projects */}
-        <Card>
-          <CardHead title="Recent Projects" />
-          <table className="w-full">
-            <thead>
-              <tr className="bg-psu-deep">
-                {['Title','Year','Status'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-white/60 uppercase tracking-widest">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProjects.slice(0, 5).length === 0 ? (
-                <tr><td colSpan={3} className="text-center py-10 text-slate-400 text-[13px]">No projects match the selected filters.</td></tr>
-              ) : filteredProjects.slice(0, 5).map(p => (
-                <tr key={p.id} className="tbl-row border-t border-slate-100">
-                  <td className="px-4 py-3 font-semibold text-slate-700 text-[13px]">{p.title}</td>
-                  <td className="px-4 py-3 text-[12px] font-mono text-gold-dark font-semibold">{p.year}</td>
-                  <td className="px-4 py-3"><span className={`badge text-[10px] ${PROJ_BADGE[p.status] || ''}`}>{p.status === 'Awarded' ? '🏆 ' : ''}{p.status}</span></td>
+        <div ref={refRecentProjectsCard}>
+          <Card>
+            <CardHead title="Recent Projects" />
+            <table className="w-full">
+              <thead>
+                <tr className="bg-psu-deep">
+                  {['Title','Year','Status'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-white/60 uppercase tracking-widest">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+              </thead>
+              <tbody>
+                {filteredProjects.slice(0, 5).length === 0 ? (
+                  <tr><td colSpan={3} className="text-center py-10 text-slate-400 text-[13px]">No projects match the selected filters.</td></tr>
+                ) : filteredProjects.slice(0, 5).map(p => (
+                  <tr key={p.id} className="tbl-row border-t border-slate-100">
+                    <td className="px-4 py-3 font-semibold text-slate-700 text-[13px]">{p.title}</td>
+                    <td className="px-4 py-3 text-[12px] font-mono text-gold-dark font-semibold">{p.year}</td>
+                    <td className="px-4 py-3"><span className={`badge text-[10px] ${PROJ_BADGE[p.status] || ''}`}>{p.status === 'Awarded' ? '🏆 ' : ''}{p.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </div>
       </div>
     </div>
   )

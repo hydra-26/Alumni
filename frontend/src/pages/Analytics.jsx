@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Chart, registerables } from 'chart.js'
+import html2canvas from 'html2canvas'
+import { jsPDF } from 'jspdf'
 import api from '../utils/api'
-import { Card, CardHead, SectionHead, StatBox, Sel } from '../components/ui'
+import { logAudit } from '../utils/audit'
+import { Card, CardHead, SectionHead, StatBox, Sel, Modal } from '../components/ui'
+import { useToast } from '../context/ToastContext'
 
 Chart.register(...registerables)
 Chart.defaults.font.family = "'Lexend', 'Noto Sans', 'Segoe UI', sans-serif"
@@ -12,18 +16,37 @@ const GOLD = '#d4a800'
 const GRID = 'rgba(214,224,245,0.45)'
 
 export default function Analytics() {
+  const { toast } = useToast()
   const [batchFilter, setBatchFilter] = useState('all')
   const [programFilter, setProgramFilter] = useState('all')
   const [alumni, setAlumni] = useState([])
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [kpis, setKpis] = useState({ total_alumni: 0, total_projects: 0, employment_rate: 0, award_winning: 0, implemented_rate: 0 })
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportSel, setExportSel] = useState({ metrics: true, radar: true, trend: true, awards: true, program: true })
 
   const radarRef = useRef(null)
   const trendRef = useRef(null)
   const awardsRef = useRef(null)
   const programRef = useRef(null)
   const instances = useRef({})
+
+  // Export capture refs
+  const refMetricsCard = useRef(null)
+  const refRadarCard = useRef(null)
+  const refTrendCard = useRef(null)
+  const refAwardsCard = useRef(null)
+  const refProgramCard = useRef(null)
+
+  const exportItems = [
+    { key: 'metrics', label: 'Key Metrics', ref: refMetricsCard },
+    { key: 'radar', label: 'Batch Radar Comparison', ref: refRadarCard },
+    { key: 'trend', label: 'Implementation Rate Trend', ref: refTrendCard },
+    { key: 'awards', label: 'Awards by Project Category', ref: refAwardsCard },
+    { key: 'program', label: 'Employment by Program', ref: refProgramCard },
+  ]
 
   useEffect(() => {
     Promise.all([
@@ -47,18 +70,25 @@ export default function Analytics() {
     return batchFilter === 'all' || p.year === batchFilter
   }), [projects, batchFilter])
 
-  const years = useMemo(() => {
+  const availableYears = useMemo(() => {
     const set = new Set()
     for (const p of projects) if (p.year) set.add(p.year)
     for (const a of alumni) if (a.batch_year) set.add(a.batch_year)
     return Array.from(set).sort((a, b) => Number(a) - Number(b))
   }, [projects, alumni])
 
+  const batchYears = useMemo(() => {
+    const set = new Set()
+    for (const p of filteredProjects) if (p.year) set.add(p.year)
+    for (const a of filteredAlumni) if (a.batch_year) set.add(a.batch_year)
+    return Array.from(set).sort((a, b) => Number(a) - Number(b))
+  }, [filteredProjects, filteredAlumni])
+
   const perYear = useMemo(() => {
     const out = {}
-    for (const y of years) {
-      const yearProjects = projects.filter(p => p.year === y)
-      const yearAlumni = alumni.filter(a => a.batch_year === y)
+    for (const y of batchYears) {
+      const yearProjects = filteredProjects.filter(p => p.year === y)
+      const yearAlumni = filteredAlumni.filter(a => a.batch_year === y)
       const projectTotal = yearProjects.length
       const implemented = yearProjects.filter(p => p.status === 'Implemented').length
       const awarded = yearProjects.filter(p => p.status === 'Awarded').length
@@ -75,9 +105,9 @@ export default function Analytics() {
       }
     }
     return out
-  }, [years, projects, alumni])
+  }, [batchYears, filteredProjects, filteredAlumni])
 
-  const selectedYears = batchFilter === 'all' ? years : [batchFilter]
+  const selectedYears = batchFilter === 'all' ? batchYears : [batchFilter]
 
   const stats = useMemo(() => {
     const alumniTotal = filteredAlumni.length
@@ -95,8 +125,13 @@ export default function Analytics() {
     }
   }, [filteredAlumni, filteredProjects])
 
-  const trendLabels = years
-  const trendValues = years.map(y => perYear[y]?.implementedPct || 0)
+  const trendYears = useMemo(() => {
+    const set = new Set()
+    for (const p of filteredProjects) if (p.year) set.add(p.year)
+    return Array.from(set).sort((a, b) => Number(a) - Number(b))
+  }, [filteredProjects])
+
+  const trendValues = trendYears.map(y => perYear[y]?.implementedPct || 0)
 
   const awardByCategory = useMemo(() => {
     const counts = {}
@@ -169,7 +204,7 @@ export default function Analytics() {
       instances.current.trend = new Chart(trendRef.current, {
         type: 'line',
         data: {
-          labels: trendLabels,
+          labels: trendYears,
           datasets: [{
             label: 'Implementation Rate %',
             data: trendValues,
@@ -211,10 +246,63 @@ export default function Analytics() {
     }
 
     return () => Object.keys(instances.current).forEach(destroy)
-  }, [selectedYears, perYear, trendLabels, trendValues, awardByCategory, employedByProgram])
+  }, [selectedYears, perYear, trendYears, trendValues, awardByCategory, employedByProgram])
 
   const batchLabel = batchFilter === 'all' ? 'all batches' : `batch ${batchFilter}`
   const programLabel = programFilter === 'all' ? 'all programs' : programFilter
+
+  const toggleExport = (key) => setExportSel(s => ({ ...s, [key]: !s[key] }))
+  const setAllExport = (value) => setExportSel(exportItems.reduce((acc, item) => {
+    acc[item.key] = value
+    return acc
+  }, {}))
+
+  const exportAnalyticsPdf = async () => {
+    const selected = exportItems.filter(item => exportSel[item.key])
+    if (!selected.length) {
+      toast('Select at least one chart to export.', 'error')
+      return
+    }
+
+    const missing = selected.filter(item => !item.ref?.current)
+    if (missing.length) {
+      toast('Some charts are not ready to export yet.', 'error')
+      return
+    }
+
+    setExporting(true)
+    try {
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const margin = 36
+
+      for (let i = 0; i < selected.length; i += 1) {
+        const node = selected[i].ref.current
+        const canvas = await html2canvas(node, { scale: 2, backgroundColor: '#ffffff' })
+        const imgData = canvas.toDataURL('image/png')
+        const maxWidth = pageWidth - margin * 2
+        const maxHeight = pageHeight - margin * 2
+        const ratio = Math.min(maxWidth / canvas.width, maxHeight / canvas.height)
+        const renderWidth = canvas.width * ratio
+        const renderHeight = canvas.height * ratio
+        const x = (pageWidth - renderWidth) / 2
+        const y = (pageHeight - renderHeight) / 2
+
+        if (i > 0) pdf.addPage()
+        pdf.addImage(imgData, 'PNG', x, y, renderWidth, renderHeight, undefined, 'FAST')
+      }
+
+      pdf.save(`analytics-export-${Date.now()}.pdf`)
+      setExportOpen(false)
+      toast('PDF exported successfully.', 'success')
+      void logAudit('Export analytics (PDF)', '#0d8a5e')
+    } catch (err) {
+      toast('Failed to export PDF.', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -255,7 +343,7 @@ export default function Analytics() {
       <SectionHead title="Performance Analytics" sub={`Deep-dive metrics for ${batchLabel} · ${programLabel}`}>
         <Sel value={batchFilter} onChange={e => setBatchFilter(e.target.value)}>
           <option value="all">All Batches</option>
-          {years.map(y => <option key={y} value={y}>{y}</option>)}
+          {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
         </Sel>
         <Sel value={programFilter} onChange={e => setProgramFilter(e.target.value)}>
           <option value="all">All Programs</option>
@@ -263,36 +351,87 @@ export default function Analytics() {
           <option value="BSCS">BSCS</option>
           <option value="BSIS">BSIS</option>
         </Sel>
+        <button className="btn-primary whitespace-nowrap" onClick={() => setExportOpen(true)} disabled={exporting}>
+          {exporting ? 'Exporting...' : 'Export PDF'}
+        </button>
       </SectionHead>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
-        <StatBox value={`${stats.alumni}`} label="Alumni" />
-        <StatBox value={`${stats.projects}`} label="Projects" />
-        <StatBox value={`${stats.employedPct}%`} label="Employed" />
-        <StatBox value={`${stats.implementedPct}%`} label="Implemented" />
-        <StatBox value={`${stats.awarded}`} label="Awarded" />
+      <Modal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        title="Export Analytics Charts"
+        footer={
+          <>
+            <button className="btn-ghost" onClick={() => setExportOpen(false)}>Cancel</button>
+            <button className="btn-primary" onClick={exportAnalyticsPdf} disabled={exporting}>
+              {exporting ? 'Exporting...' : 'Export PDF'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-[12px] text-slate-500 mb-4">Select charts to include in the PDF export.</p>
+        <div className="space-y-2">
+          {exportItems.map(item => (
+            <label key={item.key} className="flex items-center gap-2.5 cursor-pointer group">
+              <div
+                onClick={() => toggleExport(item.key)}
+                className={`w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-all duration-150 cursor-pointer
+                  ${exportSel[item.key] ? 'bg-psu border-psu' : 'border-slate-300 bg-white group-hover:border-psu/50'}`}
+              >
+                {exportSel[item.key] && (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <polyline points="1.5,5 4,7.5 8.5,2" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                )}
+              </div>
+              <span className="text-[13px] text-slate-600">{item.label}</span>
+            </label>
+          ))}
+        </div>
+        <div className="flex gap-2 pt-3">
+          <button className="btn-ghost" onClick={() => setAllExport(true)}>Select all</button>
+          <button className="btn-ghost" onClick={() => setAllExport(false)}>Clear all</button>
+        </div>
+      </Modal>
+
+      <div ref={refMetricsCard}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+          <StatBox value={`${stats.alumni}`} label="Alumni" />
+          <StatBox value={`${stats.projects}`} label="Projects" />
+          <StatBox value={`${stats.employedPct}%`} label="Employed" />
+          <StatBox value={`${stats.implementedPct}%`} label="Implemented" />
+          <StatBox value={`${stats.awarded}`} label="Awarded" />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <Card>
-          <CardHead title="Batch Radar Comparison" sub="Calculated from Supabase records" />
-          <div className="p-5"><div style={{ height: 280 }}><canvas ref={radarRef} /></div></div>
-        </Card>
-        <Card>
-          <CardHead title="Implementation Rate Trend" sub="% of projects implemented per year" />
-          <div className="p-5"><div style={{ height: 280 }}><canvas ref={trendRef} /></div></div>
-        </Card>
+        <div ref={refRadarCard}>
+          <Card>
+            <CardHead title="Batch Radar Comparison" sub="Calculated from Supabase records" />
+            <div className="p-5"><div style={{ height: 280 }}><canvas ref={radarRef} /></div></div>
+          </Card>
+        </div>
+        <div ref={refTrendCard}>
+          <Card>
+            <CardHead title="Implementation Rate Trend" sub="% of projects implemented per year" />
+            <div className="p-5"><div style={{ height: 280 }}><canvas ref={trendRef} /></div></div>
+          </Card>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHead title="Awards by Project Category" sub="Awarded projects grouped by category" />
-          <div className="p-5"><div style={{ height: 220 }}><canvas ref={awardsRef} /></div></div>
-        </Card>
-        <Card>
-          <CardHead title="Employment by Program" sub="Employed alumni grouped by course" />
-          <div className="p-5"><div style={{ height: 220 }}><canvas ref={programRef} /></div></div>
-        </Card>
+        <div ref={refAwardsCard}>
+          <Card>
+            <CardHead title="Awards by Project Category" sub="Awarded projects grouped by category" />
+            <div className="p-5"><div style={{ height: 220 }}><canvas ref={awardsRef} /></div></div>
+          </Card>
+        </div>
+        <div ref={refProgramCard}>
+          <Card>
+            <CardHead title="Employment by Program" sub="Employed alumni grouped by course" />
+            <div className="p-5"><div style={{ height: 220 }}><canvas ref={programRef} /></div></div>
+          </Card>
+        </div>
       </div>
 
       {(kpis.total_alumni === 0 && kpis.total_projects === 0) && (

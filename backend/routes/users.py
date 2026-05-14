@@ -1,5 +1,7 @@
 from flask import Blueprint, request, jsonify
 from supabase_client import get_supabase
+from audit import log_audit, AUDIT_COLORS
+from email_utils import send_user_credentials_email, resolve_system_url
 
 users_bp = Blueprint("users", __name__)
 
@@ -31,6 +33,19 @@ def create_user():
         "password":       data.get("password"),   # hash in production!
         "status":         "Active",
     }).execute()
+    created = result.data[0] if result.data else {}
+    name = f"{created.get('first_name', '')} {created.get('last_name', '')}".strip() or created.get("email") or "User"
+    log_audit(f"User created: {name}", color=AUDIT_COLORS["user"], sb=sb)
+    email_sent = send_user_credentials_email(
+        to_email=created.get("email"),
+        name=name,
+        username=created.get("username"),
+        password=data.get("password"),
+        role=created.get("role"),
+        system_url=resolve_system_url(),
+    )
+    if email_sent:
+        log_audit(f"Credentials email sent: {created.get('email')}", color=AUDIT_COLORS["user"], sb=sb)
     return jsonify(result.data[0]), 201
 
 
@@ -42,11 +57,20 @@ def update_user(user_id):
     result = sb.table("users").update(data).eq("id", user_id).execute()
     if not result.data:
         return jsonify({"error": "Not found"}), 404
-    return jsonify(result.data[0])
+    updated = result.data[0]
+    name = f"{updated.get('first_name', '')} {updated.get('last_name', '')}".strip() or updated.get("email") or f"User #{user_id}"
+    log_audit(f"User updated: {name}", color=AUDIT_COLORS["user"], sb=sb)
+    return jsonify(updated)
 
 
 @users_bp.delete("/<int:user_id>")
 def delete_user(user_id):
     sb = get_supabase()
+    target = sb.table("users").select("first_name,last_name,email").eq("id", user_id).single().execute()
+    name = None
+    if target.data:
+        name = f"{target.data.get('first_name', '')} {target.data.get('last_name', '')}".strip() or target.data.get("email")
+    name = name or f"User #{user_id}"
     sb.table("users").delete().eq("id", user_id).execute()
+    log_audit(f"User deleted: {name}", color=AUDIT_COLORS["user"], sb=sb)
     return jsonify({"message": "Deleted"})

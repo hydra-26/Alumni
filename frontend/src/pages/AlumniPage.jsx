@@ -2,19 +2,20 @@ import { useState, useEffect } from 'react'
 import api from '../utils/api'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
+import { exportAlumniToExcel } from '../utils/exportToExcel'
+import { logAudit } from '../utils/audit'
 import {
   SectionHead, TableWrap, SearchInput, Sel, IconBtn,
   StatusBadge, Pagination, Modal, FormGroup, DeleteModal
 } from '../components/ui'
 
-const EMPTY = { first_name:'', last_name:'', batch_year:'2025', course:'BSIT', email:'', contact:'', employment_status:'Seeking', company:'', skills:'' }
+const EMPTY = { first_name:'', last_name:'', batch_year:'2025', course:'BSIT', email:'', contact:'', employment_status:'Seeking', company:'' }
 const COURSES  = ['BSIT','BSCS','BSIS']
 const STATUSES = ['Employed','Self-Employed','Seeking','Studying']
-const YEARS    = ['2025','2024','2023','2022','2021','2020','2019']
 
 export default function AlumniPage() {
   const { toast }   = useToast()
-  const { canManageData } = useAuth()
+  const { canManageData, isAdmin } = useAuth()
   const [rows, setRows]     = useState([])
   const [search, setSearch] = useState('')
   const [filterBatch, setFilterBatch] = useState('')
@@ -56,6 +57,13 @@ export default function AlumniPage() {
     setForm(EMPTY)
     setModal(true)
   }
+  
+  const handleExport = () => {
+    const filename = `Alumni_Records_${new Date().toISOString().split('T')[0]}.xlsx`
+    exportAlumniToExcel(filtered, filename)
+    toast('Alumni records exported successfully!', 'success')
+    void logAudit('Export alumni records (Excel)', '#0d8a5e')
+  }
   const openView = (r) => { setViewing(r); setViewModal(true) }
   const openEdit = (r) => {
     if (!canManageData) return toast('View-only access: only Chairperson can edit records.', 'info')
@@ -70,12 +78,14 @@ export default function AlumniPage() {
   }
 
   const save = async () => {
+    const payload = { ...form }
+    delete payload.skills
     try {
       if (editing) {
-        await api.put(`/alumni/${editing.id}`, form)
+        await api.put(`/alumni/${editing.id}`, payload)
         toast('Alumni record updated!', 'success')
       } else {
-        await api.post('/alumni/', form)
+        await api.post('/alumni/', payload)
         toast('Alumni record added!', 'success')
       }
       setModal(false)
@@ -111,13 +121,22 @@ export default function AlumniPage() {
   }, [filtered.length, page])
 
   const paginated = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE)
+  
+  const uniqueBatchYears = (() => {
+    const years = new Set(rows.map(r => r.batch_year).filter(Boolean))
+    return Array.from(years).sort((a, b) => b.localeCompare(a))
+  })()
 
   const F = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
+  const showActionsColumn = !isAdmin
 
   return (
     <div className="animate-fade-up">
-      <SectionHead title="Alumni Records" sub={`${filtered.length} registered alumni · BSIT / BSCS / BSIS`}>
-        {canManageData && <button className="btn-primary" onClick={openAdd}>+ Add Alumni</button>}
+      <SectionHead title="Alumni Records" sub={`${filtered.length} registered alumni`}>
+        <div className="flex gap-2">
+          {canManageData && <button className="btn-primary" onClick={openAdd}>+ Add Alumni</button>}
+          <button className="btn-primary" onClick={handleExport} style={{backgroundColor: '#10b981'}}>📥 Export</button>
+        </div>
       </SectionHead>
 
       <TableWrap>
@@ -126,7 +145,7 @@ export default function AlumniPage() {
           <SearchInput placeholder="Search by name, course, batch…" value={search} onChange={setSearch} />
           <Sel value={filterBatch}  onChange={e => setFilterBatch(e.target.value)}>
             <option value="">All Batches</option>
-            {YEARS.map(y => <option key={y}>{y}</option>)}
+            {uniqueBatchYears.map(y => <option key={y}>{y}</option>)}
           </Sel>
           <Sel value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
             <option value="">All Status</option>
@@ -143,7 +162,7 @@ export default function AlumniPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-psu-deep">
-                {['Name','Batch','Course','Contact','Employment','Actions'].map(h => (
+                {['Name','Batch','Course','Contact','Employment', ...(showActionsColumn ? ['Actions'] : [])].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-white/60 uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -160,16 +179,18 @@ export default function AlumniPage() {
                     <td className="px-4 py-3"><div className="h-3 w-14 bg-slate-100 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-3 w-28 bg-slate-100 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-5 w-24 bg-slate-100 rounded-full" /></td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1.5">
-                        <div className="w-8 h-8 rounded-lg bg-slate-100" />
-                        <div className="w-8 h-8 rounded-lg bg-slate-100" />
-                      </div>
-                    </td>
+                    {showActionsColumn && (
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1.5">
+                          <div className="w-8 h-8 rounded-lg bg-slate-100" />
+                          <div className="w-8 h-8 rounded-lg bg-slate-100" />
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               ) : paginated.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-[13px]">No alumni records found.</td></tr>
+                <tr><td colSpan={showActionsColumn ? 6 : 5} className="text-center py-12 text-slate-400 text-[13px]">No alumni records found.</td></tr>
               ) : paginated.map((a) => (
                 <tr key={a.id} className="tbl-row border-t border-slate-100 cursor-pointer" onClick={() => openView(a)}>
                   <td className="px-4 py-3">
@@ -180,14 +201,16 @@ export default function AlumniPage() {
                   <td className="px-4 py-3 text-[13px] text-slate-600">{a.course}</td>
                   <td className="px-4 py-3 text-[12px] text-slate-500 font-mono">{a.contact || '—'}</td>
                   <td className="px-4 py-3"><StatusBadge status={a.employment_status} /></td>
-                  <td className="px-4 py-3">
-                    {canManageData && (
-                      <div className="flex gap-1.5">
-                        <IconBtn title="Edit" onClick={(e) => { e.stopPropagation(); openEdit(a) }}>✏️</IconBtn>
-                        <IconBtn title="Delete" danger onClick={(e) => { e.stopPropagation(); openDel(a) }}>🗑️</IconBtn>
-                      </div>
-                    )}
-                  </td>
+                  {showActionsColumn && (
+                    <td className="px-4 py-3">
+                      {canManageData && (
+                        <div className="flex gap-1.5">
+                          <IconBtn title="Edit" onClick={(e) => { e.stopPropagation(); openEdit(a) }}>✏️</IconBtn>
+                          <IconBtn title="Delete" danger onClick={(e) => { e.stopPropagation(); openDel(a) }}>🗑️</IconBtn>
+                        </div>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -209,7 +232,7 @@ export default function AlumniPage() {
 
           <FormGroup label="Batch Year">
             <select className="field" value={form.batch_year} onChange={F('batch_year')}>
-              {YEARS.map(y => <option key={y}>{y}</option>)}
+              {uniqueBatchYears.map(y => <option key={y}>{y}</option>)}
             </select>
           </FormGroup>
           <FormGroup label="Course">
@@ -228,9 +251,6 @@ export default function AlumniPage() {
           </FormGroup>
           <FormGroup label="Company / Employer"><input className="field" value={form.company} onChange={F('company')} placeholder="Optional" /></FormGroup>
 
-          <div className="md:col-span-2">
-            <FormGroup label="Key Skills"><input className="field" value={form.skills} onChange={F('skills')} placeholder="e.g. React, Python, MySQL (comma-separated)" /></FormGroup>
-          </div>
         </div>
       </Modal>
 
@@ -272,15 +292,6 @@ export default function AlumniPage() {
               </InfoCard>
             </div>
 
-            <InfoCard title="Skills">
-              {splitList(viewing.skills).length === 0 ? (
-                <div className="text-[13px] text-slate-400">No skills listed.</div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {splitList(viewing.skills).map((s) => <Tag key={s}>{s}</Tag>)}
-                </div>
-              )}
-            </InfoCard>
           </div>
         )}
       </Modal>
@@ -311,10 +322,6 @@ function FieldRow({ label, value }) {
 
 function Tag({ children }) {
   return <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-psu border border-blue-100">{children}</span>
-}
-
-function splitList(value) {
-  return (value || '').split(',').map(v => v.trim()).filter(Boolean)
 }
 
 function formatDate(value) {

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import api from '../utils/api'
 import { useToast } from '../context/ToastContext'
+import { exportAuditLogsToExcel } from '../utils/exportToExcel'
+import { logAudit } from '../utils/audit'
 import { SectionHead, Card, CardHead } from '../components/ui'
 
 function fmtDate(d) {
@@ -28,6 +30,17 @@ export default function SystemPage() {
     setTimeout(() => { setImporting(false); toast('Data imported successfully!', 'success') }, 1500)
   }
 
+  const handleExport = () => {
+    if (!logs || logs.length === 0) {
+      toast('No logs to export.', 'info')
+      return
+    }
+    const filename = `User_Activity_Logs_${new Date().toISOString().split('T')[0]}.xlsx`
+    exportAuditLogsToExcel(logs, filename)
+    toast('User activity logs exported!', 'success')
+    void logAudit('Export user activity logs (Excel)', '#0d8a5e')
+  }
+
   return (
     <div className="animate-fade-up">
       <SectionHead title="User Activity Logs" sub="View User Activity Logs" />
@@ -35,7 +48,7 @@ export default function SystemPage() {
       {/* User Activity Logs */}
       <Card>
         <CardHead title="User Activity Logs" sub="Recent system activity trail"
-          action={<button className="btn-ghost text-[12px]" onClick={() => toast('Logs exported!','success')}>Export Logs</button>} />
+          action={<button className="btn-ghost text-[12px]" onClick={handleExport}>Export Logs</button>} />
         <div className="p-5 space-y-0">
           {loadingLogs && (
             <div className="space-y-0">

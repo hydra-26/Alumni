@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useToast } from '../context/ToastContext'
 import { SectionHead, Card, CardHead } from '../components/ui'
+import { logAudit } from '../utils/audit'
 
 export default function ReportsPage() {
   const { toast } = useToast()
@@ -50,8 +51,20 @@ export default function ReportsPage() {
               </div>
             </div>
             <div className="flex gap-2 pt-1">
-              <button onClick={() => toast('PDF report generated!','success')} className="btn-primary flex items-center gap-2">📄 Export PDF</button>
-              <button onClick={() => toast('Excel file downloaded!','success')} className="btn-ghost flex items-center gap-2">📊 Export Excel</button>
+              <button
+                onClick={() => {
+                  toast('PDF report generated!','success')
+                  void logAudit('Export alumni report (PDF)', '#0d8a5e')
+                }}
+                className="btn-primary flex items-center gap-2"
+              >📄 Export PDF</button>
+              <button
+                onClick={() => {
+                  toast('Excel file downloaded!','success')
+                  void logAudit('Export alumni report (Excel)', '#0d8a5e')
+                }}
+                className="btn-ghost flex items-center gap-2"
+              >📊 Export Excel</button>
             </div>
           </div>
         </Card>
@@ -73,8 +86,20 @@ export default function ReportsPage() {
               </select>
             </div>
             <div className="flex gap-2 pt-1">
-              <button onClick={() => toast('Project report exported!','success')} className="btn-primary flex items-center gap-2">📄 Export PDF</button>
-              <button onClick={() => toast('Excel file downloaded!','success')} className="btn-ghost flex items-center gap-2">📊 Export Excel</button>
+              <button
+                onClick={() => {
+                  toast('Project report exported!','success')
+                  void logAudit('Export project report (PDF)', '#0d8a5e')
+                }}
+                className="btn-primary flex items-center gap-2"
+              >📄 Export PDF</button>
+              <button
+                onClick={() => {
+                  toast('Excel file downloaded!','success')
+                  void logAudit('Export project report (Excel)', '#0d8a5e')
+                }}
+                className="btn-ghost flex items-center gap-2"
+              >📊 Export Excel</button>
             </div>
           </div>
         </Card>

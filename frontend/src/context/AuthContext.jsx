@@ -15,7 +15,8 @@ export function AuthProvider({ children }) {
     return data.user
   }, [])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try { await api.post('/auth/logout') } catch {}
     setUser(null)
     localStorage.removeItem('appas_user')
   }, [])

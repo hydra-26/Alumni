@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from supabase_client import get_supabase
+from audit import log_audit, AUDIT_COLORS
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -28,6 +29,12 @@ def login():
         return jsonify({"error": "Invalid credentials"}), 401
 
     user = result.data
+    log_audit(
+        f"User login: {user['email']}",
+        actor=user["email"],
+        color=AUDIT_COLORS["auth"],
+        sb=sb,
+    )
     return jsonify({
         "user": {
             "id": user["id"],
@@ -42,4 +49,7 @@ def login():
 
 @auth_bp.post("/logout")
 def logout():
+    actor = request.headers.get("X-User")
+    label = actor or "system"
+    log_audit(f"User logout: {label}", actor=actor, color=AUDIT_COLORS["auth"])
     return jsonify({"message": "Logged out"})

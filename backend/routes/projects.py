@@ -1,7 +1,20 @@
 from flask import Blueprint, request, jsonify
 from supabase_client import get_supabase
+from audit import log_audit, AUDIT_COLORS
 
 projects_bp = Blueprint("projects", __name__)
+
+PROJECT_FIELDS = [
+    "title",
+    "category",
+    "year",
+    "adviser",
+    "members",
+    "status",
+    "award",
+    "abstract",
+    "project_link",
+]
 
 
 @projects_bp.get("/")
@@ -38,33 +51,36 @@ def get_project(project_id):
 
 @projects_bp.post("/")
 def create_project():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    payload = {key: data.get(key) for key in PROJECT_FIELDS}
     sb = get_supabase()
-    result = sb.table("projects").insert({
-        "title":    data.get("title"),
-        "category": data.get("category"),
-        "year":     data.get("year"),
-        "adviser":  data.get("adviser"),
-        "members":  data.get("members"),
-        "status":   data.get("status"),
-        "award":    data.get("award"),
-        "abstract": data.get("abstract"),
-    }).execute()
+    result = sb.table("projects").insert(payload).execute()
+    created = result.data[0] if result.data else {}
+    title = created.get("title") or "Project"
+    log_audit(f"Project added: {title}", color=AUDIT_COLORS["project"], sb=sb)
     return jsonify(result.data[0]), 201
 
 
 @projects_bp.put("/<int:project_id>")
 def update_project(project_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    payload = {key: data.get(key) for key in PROJECT_FIELDS if key in data}
     sb = get_supabase()
-    result = sb.table("projects").update(data).eq("id", project_id).execute()
+    result = sb.table("projects").update(payload).eq("id", project_id).execute()
     if not result.data:
         return jsonify({"error": "Not found"}), 404
-    return jsonify(result.data[0])
+    updated = result.data[0]
+    title = updated.get("title") or f"Project #{project_id}"
+    log_audit(f"Project updated: {title}", color=AUDIT_COLORS["project"], sb=sb)
+    return jsonify(updated)
 
 
 @projects_bp.delete("/<int:project_id>")
 def delete_project(project_id):
     sb = get_supabase()
+    target = sb.table("projects").select("title").eq("id", project_id).single().execute()
+    title = target.data.get("title") if target.data else None
+    title = title or f"Project #{project_id}"
     sb.table("projects").delete().eq("id", project_id).execute()
+    log_audit(f"Project deleted: {title}", color=AUDIT_COLORS["project"], sb=sb)
     return jsonify({"message": "Deleted"})

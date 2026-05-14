@@ -2,21 +2,22 @@ import { useState, useEffect } from 'react'
 import api from '../utils/api'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
+import { exportProjectsToExcel } from '../utils/exportToExcel'
+import { logAudit } from '../utils/audit'
 import {
   SectionHead, TableWrap, SearchInput, Sel, IconBtn,
   StatusBadge, Pagination, Modal, FormGroup, DeleteModal
 } from '../components/ui'
 
-const EMPTY = { title:'', category:'Web App', year:'2025', adviser:'', members:'', status:'In Progress', award:'', abstract:'' }
+const EMPTY = { title:'', category:'Web App', year:'2025', adviser:'', members:'', status:'In Progress', award:'', abstract:'', project_link:'' }
 const CATEGORIES = ['Web App','Mobile App','IoT System','Data Analytics','Desktop App']
 const STATUSES   = ['Implemented','In Progress','Proposed','Awarded']
-const YEARS      = ['2025','2024','2023','2022','2021','2020','2019']
 
 const PER_PAGE = 10
 
 export default function ProjectsPage() {
   const { toast }   = useToast()
-  const { canManageData } = useAuth()
+  const { canManageData, isAdmin } = useAuth()
   const [rows, setRows]     = useState([])
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat]       = useState('')
@@ -57,6 +58,13 @@ export default function ProjectsPage() {
     setForm(EMPTY)
     setModal(true)
   }
+  
+  const handleExport = () => {
+    const filename = `Projects_Records_${new Date().toISOString().split('T')[0]}.xlsx`
+    exportProjectsToExcel(filtered, filename)
+    toast('Projects records exported successfully!', 'success')
+    void logAudit('Export project records (Excel)', '#0d8a5e')
+  }
   const openView = (r) => { setViewing(r); setViewModal(true) }
   const openEdit = (r) => {
     if (!canManageData) return toast('View-only access: only Chairperson can edit projects.', 'info')
@@ -71,12 +79,16 @@ export default function ProjectsPage() {
   }
 
   const save = async () => {
+    const payload = {
+      ...form,
+      project_link: form.project_link?.trim() || '',
+    }
     try {
       if (editing) {
-        await api.put(`/projects/${editing.id}`, form)
+        await api.put(`/projects/${editing.id}`, payload)
         toast('Project updated!', 'success')
       } else {
-        await api.post('/projects/', form)
+        await api.post('/projects/', payload)
         toast('Project saved!', 'success')
       }
       setModal(false)
@@ -112,16 +124,26 @@ export default function ProjectsPage() {
   }, [filtered.length, page])
 
   const paginated = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE)
+  
+  const uniqueYears = (() => {
+    const years = new Set(rows.map(r => r.year).filter(Boolean))
+    return Array.from(years).sort((a, b) => b.localeCompare(a))
+  })()
+
   const F = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
+  const showActionsColumn = !isAdmin
 
   return (
     <div className="animate-fade-up">
-      <SectionHead title="Project Records" sub={`${filtered.length} capstone projects · 2019–2025`}>
-        {canManageData && (
-          <>
-            <button className="btn-primary" onClick={openAdd}>+ Add Project</button>
-          </>
-        )}
+      <SectionHead title="Project Records" sub={`${filtered.length} capstone projects`}>
+        <div className="flex gap-2">
+          {canManageData && (
+            <>
+              <button className="btn-primary" onClick={openAdd}>+ Add Project</button>
+            </>
+          )}
+          <button className="btn-primary" onClick={handleExport} style={{backgroundColor: '#10b981'}}>📥 Export</button>
+        </div>
       </SectionHead>
 
       <TableWrap>
@@ -137,7 +159,7 @@ export default function ProjectsPage() {
           </Sel>
           <Sel value={filterYear}   onChange={e => setFilterYear(e.target.value)}>
             <option value="">All Years</option>
-            {YEARS.map(y => <option key={y}>{y}</option>)}
+            {uniqueYears.map(y => <option key={y}>{y}</option>)}
           </Sel>
         </div>
 
@@ -145,7 +167,7 @@ export default function ProjectsPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-psu-deep">
-                {['Title','Category','Year','Adviser','Members','Status','Actions'].map(h => (
+                {['Title','Category','Year','Adviser','Members','Status', ...(showActionsColumn ? ['Actions'] : [])].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-white/60 uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -163,16 +185,18 @@ export default function ProjectsPage() {
                     <td className="px-4 py-3"><div className="h-3 w-24 bg-slate-100 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-3 w-28 bg-slate-100 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-5 w-24 bg-slate-100 rounded-full" /></td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1.5">
-                        <div className="w-8 h-8 rounded-lg bg-slate-100" />
-                        <div className="w-8 h-8 rounded-lg bg-slate-100" />
-                      </div>
-                    </td>
+                    {showActionsColumn && (
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1.5">
+                          <div className="w-8 h-8 rounded-lg bg-slate-100" />
+                          <div className="w-8 h-8 rounded-lg bg-slate-100" />
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               ) : paginated.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-slate-400 text-[13px]">No projects found.</td></tr>
+                <tr><td colSpan={showActionsColumn ? 7 : 6} className="text-center py-12 text-slate-400 text-[13px]">No projects found.</td></tr>
               ) : paginated.map((p) => (
                 <tr key={p.id} className="tbl-row border-t border-slate-100 cursor-pointer" onClick={() => openView(p)}>
                   <td className="px-4 py-3">
@@ -184,14 +208,16 @@ export default function ProjectsPage() {
                   <td className="px-4 py-3 text-[12px] text-slate-600">{p.adviser || '—'}</td>
                   <td className="px-4 py-3 text-[12px] text-slate-500 max-w-[150px] truncate">{p.members || '—'}</td>
                   <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
-                  <td className="px-4 py-3">
-                    {canManageData && (
-                      <div className="flex gap-1.5">
-                        <IconBtn title="Edit" onClick={(e) => { e.stopPropagation(); openEdit(p) }}>✏️</IconBtn>
-                        <IconBtn title="Delete" danger onClick={(e) => { e.stopPropagation(); openDel(p) }}>🗑️</IconBtn>
-                      </div>
-                    )}
-                  </td>
+                  {showActionsColumn && (
+                    <td className="px-4 py-3">
+                      {canManageData && (
+                        <div className="flex gap-1.5">
+                          <IconBtn title="Edit" onClick={(e) => { e.stopPropagation(); openEdit(p) }}>✏️</IconBtn>
+                          <IconBtn title="Delete" danger onClick={(e) => { e.stopPropagation(); openDel(p) }}>🗑️</IconBtn>
+                        </div>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -218,7 +244,7 @@ export default function ProjectsPage() {
           </FormGroup>
           <FormGroup label="Year">
             <select className="field" value={form.year} onChange={F('year')}>
-              {YEARS.map(y => <option key={y}>{y}</option>)}
+              {uniqueYears.map(y => <option key={y}>{y}</option>)}
             </select>
           </FormGroup>
 
@@ -231,6 +257,10 @@ export default function ProjectsPage() {
             </select>
           </FormGroup>
           <FormGroup label="Award (if any)"><input className="field" value={form.award} onChange={F('award')} placeholder="e.g. Best in Capstone" /></FormGroup>
+
+          <FormGroup label="Project Link">
+            <input className="field" type="url" value={form.project_link || ''} onChange={F('project_link')} placeholder="https://example.com/project" />
+          </FormGroup>
 
           <div className="md:col-span-2">
             <FormGroup label="Abstract">
@@ -273,6 +303,21 @@ export default function ProjectsPage() {
                   <div className="flex flex-wrap gap-2">
                     {splitList(viewing.members).map((member) => <Tag key={member}>{member}</Tag>)}
                   </div>
+                )}
+              </InfoCard>
+
+              <InfoCard title="Project Link">
+                {viewing.project_link ? (
+                  <a
+                    href={viewing.project_link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[13px] font-medium text-psu break-words hover:underline"
+                  >
+                    {viewing.project_link}
+                  </a>
+                ) : (
+                  <div className="text-[13px] text-slate-400">No project link provided.</div>
                 )}
               </InfoCard>
             </div>

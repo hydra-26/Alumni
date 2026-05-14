@@ -20,12 +20,6 @@ const NAV = [
       { to: '/projects', label: 'Projects',        icon: <BookIcon /> },
     ],
   },
-  {
-    group: 'Reports',
-    items: [
-      { to: '/reports', label: 'Export Reports', icon: <FileIcon /> },
-    ],
-  },
 ]
 
 const ADMIN_NAV = {

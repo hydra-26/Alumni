@@ -15,8 +15,10 @@
 
 import axios from 'axios'
 
-// Use env API URL when set; fallback keeps existing Render API.
-const apiBase = (import.meta.env.VITE_API_URL || 'https://alumni-rxma.onrender.com/api').replace(/\/+$/, '')
+// Use env API URL when set; in dev fall back to the Vite proxy, otherwise keep Render API.
+const envBase = import.meta.env.VITE_API_URL
+const defaultBase = import.meta.env.DEV ? '/api' : 'https://alumni-rxma.onrender.com/api'
+const apiBase = ((envBase && envBase.trim()) ? envBase : defaultBase).replace(/\/+$/, '')
 const api = axios.create({ baseURL: apiBase })
 
 // Attach user info from localStorage for audit context
