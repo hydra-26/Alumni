@@ -9,6 +9,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Analytics = lazy(() => import('./pages/Analytics'))
 const AlumniPage = lazy(() => import('./pages/AlumniPage'))
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'))
+const UploadPage = lazy(() => import('./pages/UploadPage'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 const UsersPage = lazy(() => import('./pages/UsersPage'))
 const SystemPage = lazy(() => import('./pages/SystemPage'))
@@ -21,10 +22,11 @@ function RouteLoader() {
   )
 }
 
-function ProtectedRoute({ children, adminOnly = false }) {
-  const { user, isAdmin } = useAuth()
+function ProtectedRoute({ children, adminOnly = false, chairpersonOnly = false }) {
+  const { user, isAdmin, canManageData } = useAuth()
   if (!user) return <Navigate to="/login" replace />
   if (adminOnly && !isAdmin) return <Navigate to="/" replace />
+  if (chairpersonOnly && !canManageData) return <Navigate to="/" replace />
   return children
 }
 
@@ -38,6 +40,7 @@ function AppRoutes() {
         <Route path="analytics" element={<Analytics />} />
         <Route path="alumni"    element={<AlumniPage />} />
         <Route path="projects"  element={<ProjectsPage />} />
+        <Route path="upload"    element={<ProtectedRoute chairpersonOnly><UploadPage /></ProtectedRoute>} />
         <Route path="reports"   element={<ReportsPage />} />
         <Route path="users"     element={<ProtectedRoute adminOnly><UsersPage /></ProtectedRoute>} />
         <Route path="system"    element={<ProtectedRoute adminOnly><SystemPage /></ProtectedRoute>} />

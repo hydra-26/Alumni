@@ -9,8 +9,7 @@ import {
   StatusBadge, Pagination, Modal, FormGroup, DeleteModal
 } from '../components/ui'
 
-const EMPTY = { first_name:'', last_name:'', batch_year:'2025', course:'BSIT', email:'', contact:'', employment_status:'Seeking', company:'' }
-const COURSES  = ['BSIT','BSCS','BSIS']
+const EMPTY = { first_name:'', last_name:'', batch_year:'2025', email:'', contact:'', employment_status:'Seeking', company:'' }
 const STATUSES = ['Employed','Self-Employed','Seeking','Studying']
 
 export default function AlumniPage() {
@@ -20,7 +19,6 @@ export default function AlumniPage() {
   const [search, setSearch] = useState('')
   const [filterBatch, setFilterBatch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
-  const [filterCourse, setFilterCourse] = useState('')
   const [page, setPage]     = useState(1)
   const [modal, setModal]   = useState(false)
   const [viewModal, setViewModal] = useState(false)
@@ -35,7 +33,6 @@ export default function AlumniPage() {
     const params = {}
     if (filterBatch)  params.batch  = filterBatch
     if (filterStatus) params.status = filterStatus
-    if (filterCourse) params.course = filterCourse
     if (search)       params.q      = search
     setLoading(true)
     try {
@@ -48,8 +45,8 @@ export default function AlumniPage() {
     }
   }
 
-  useEffect(() => { load() }, [search, filterBatch, filterStatus, filterCourse])
-  useEffect(() => { setPage(1) }, [search, filterBatch, filterStatus, filterCourse])
+  useEffect(() => { load() }, [search, filterBatch, filterStatus])
+  useEffect(() => { setPage(1) }, [search, filterBatch, filterStatus])
 
   const openAdd  = () => {
     if (!canManageData) return toast('View-only access: only Chairperson can add records.', 'info')
@@ -104,11 +101,10 @@ export default function AlumniPage() {
 
   const filtered = rows.filter(r => {
     const q = search.trim().toLowerCase()
-    const passQ = !q || `${r.first_name} ${r.last_name}`.toLowerCase().includes(q) || r.course?.toLowerCase().includes(q) || r.batch_year?.includes(q)
+    const passQ = !q || `${r.first_name} ${r.last_name}`.toLowerCase().includes(q) || r.batch_year?.includes(q)
     const passBatch = !filterBatch || r.batch_year === filterBatch
     const passStatus = !filterStatus || r.employment_status === filterStatus
-    const passCourse = !filterCourse || r.course === filterCourse
-    return passQ && passBatch && passStatus && passCourse
+    return passQ && passBatch && passStatus
   }).sort((a, b) => {
     const dateA = new Date(a.created_at || 0)
     const dateB = new Date(b.created_at || 0)
@@ -142,7 +138,7 @@ export default function AlumniPage() {
       <TableWrap>
         {/* Toolbar */}
         <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center gap-2.5">
-          <SearchInput placeholder="Search by name, course, batch…" value={search} onChange={setSearch} />
+          <SearchInput placeholder="Search by name or batch…" value={search} onChange={setSearch} />
           <Sel value={filterBatch}  onChange={e => setFilterBatch(e.target.value)}>
             <option value="">All Batches</option>
             {uniqueBatchYears.map(y => <option key={y}>{y}</option>)}
@@ -151,10 +147,6 @@ export default function AlumniPage() {
             <option value="">All Status</option>
             {STATUSES.map(s => <option key={s}>{s}</option>)}
           </Sel>
-          <Sel value={filterCourse} onChange={e => setFilterCourse(e.target.value)}>
-            <option value="">All Courses</option>
-            {COURSES.map(c => <option key={c}>{c}</option>)}
-          </Sel>
         </div>
 
         {/* Table */}
@@ -162,7 +154,7 @@ export default function AlumniPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-psu-deep">
-                {['Name','Batch','Course','Contact','Employment', ...(showActionsColumn ? ['Actions'] : [])].map(h => (
+                {['Name','Batch','Contact','Employment', ...(showActionsColumn ? ['Actions'] : [])].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-white/60 uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -176,7 +168,6 @@ export default function AlumniPage() {
                       <div className="h-3 w-24 bg-slate-100 rounded" />
                     </td>
                     <td className="px-4 py-3"><div className="h-3 w-12 bg-slate-100 rounded" /></td>
-                    <td className="px-4 py-3"><div className="h-3 w-14 bg-slate-100 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-3 w-28 bg-slate-100 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-5 w-24 bg-slate-100 rounded-full" /></td>
                     {showActionsColumn && (
@@ -190,7 +181,7 @@ export default function AlumniPage() {
                   </tr>
                 ))
               ) : paginated.length === 0 ? (
-                <tr><td colSpan={showActionsColumn ? 6 : 5} className="text-center py-12 text-slate-400 text-[13px]">No alumni records found.</td></tr>
+                <tr><td colSpan={showActionsColumn ? 5 : 4} className="text-center py-12 text-slate-400 text-[13px]">No alumni records found.</td></tr>
               ) : paginated.map((a) => (
                 <tr key={a.id} className="tbl-row border-t border-slate-100 cursor-pointer" onClick={() => openView(a)}>
                   <td className="px-4 py-3">
@@ -198,7 +189,6 @@ export default function AlumniPage() {
                     {a.company && <div className="text-[11px] text-slate-400 mt-0.5">{a.company}</div>}
                   </td>
                   <td className="px-4 py-3 text-[12px] font-mono font-semibold text-psu">{a.batch_year}</td>
-                  <td className="px-4 py-3 text-[13px] text-slate-600">{a.course}</td>
                   <td className="px-4 py-3 text-[12px] text-slate-500 font-mono">{a.contact || '—'}</td>
                   <td className="px-4 py-3"><StatusBadge status={a.employment_status} /></td>
                   {showActionsColumn && (
@@ -235,11 +225,6 @@ export default function AlumniPage() {
               {uniqueBatchYears.map(y => <option key={y}>{y}</option>)}
             </select>
           </FormGroup>
-          <FormGroup label="Course">
-            <select className="field" value={form.course} onChange={F('course')}>
-              {COURSES.map(c => <option key={c}>{c}</option>)}
-            </select>
-          </FormGroup>
 
           <FormGroup label="Email Address"><input className="field" type="email" value={form.email} onChange={F('email')} placeholder="student@psu.edu.ph" /></FormGroup>
           <FormGroup label="Contact Number"><input className="field" value={form.contact} onChange={F('contact')} placeholder="+63 9XX XXX XXXX" /></FormGroup>
@@ -272,7 +257,6 @@ export default function AlumniPage() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <StatusBadge status={viewing.employment_status} />
-                  <Tag>{viewing.course || 'No Course'}</Tag>
                   <Tag>{viewing.batch_year || 'No Batch'}</Tag>
                 </div>
               </div>
@@ -286,7 +270,6 @@ export default function AlumniPage() {
               </InfoCard>
 
               <InfoCard title="Record Info">
-                <FieldRow label="Course" value={viewing.course} />
                 <FieldRow label="Batch Year" value={viewing.batch_year} />
                 <FieldRow label="Created" value={formatDate(viewing.created_at)} />
               </InfoCard>

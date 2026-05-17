@@ -38,7 +38,6 @@ export default function Dashboard() {
   const [categoryCounts, setCategoryCounts] = useState({})
   const [employmentTrend, setEmploymentTrend] = useState({})
   const [yearFilter, setYearFilter] = useState('all')
-  const [programFilter, setProgramFilter] = useState('all')
   const [exportOpen, setExportOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportSel, setExportSel] = useState({
@@ -94,9 +93,8 @@ export default function Dashboard() {
   // Filter alumni and projects based on selected filters
   const filteredAlumni = useMemo(() => alumni.filter(a => {
     const yearMatch = yearFilter === 'all' || a.batch_year === yearFilter
-    const programMatch = programFilter === 'all' || a.course === programFilter
-    return yearMatch && programMatch
-  }), [alumni, yearFilter, programFilter])
+    return yearMatch
+  }), [alumni, yearFilter])
 
   const filteredProjects = useMemo(() => projects.filter(p => yearFilter === 'all' || p.year === yearFilter), [projects, yearFilter])
 
@@ -224,8 +222,6 @@ export default function Dashboard() {
   const max = Math.max(1, ...vals)
 
   const yearLabel = yearFilter === 'all' ? 'All Years' : yearFilter
-  const programLabel = programFilter === 'all' ? 'All Programs' : programFilter
-
   const toggleExport = (key) => setExportSel(s => ({ ...s, [key]: !s[key] }))
   const setAllExport = (value) => setExportSel(exportItems.reduce((acc, item) => {
     acc[item.key] = value
@@ -348,14 +344,10 @@ export default function Dashboard() {
 
   return (
     <div className="animate-fade-up">
-      <SectionHead title="Performance Overview" sub={`Academic Year ${yearLabel} · ${programLabel} · Real-time`}>
+      <SectionHead title="Performance Overview" sub={`Academic Year ${yearLabel} · Real-time`}>
         <Sel value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
           <option value="all">All Years</option>
           {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-        </Sel>
-        <Sel value={programFilter} onChange={e => setProgramFilter(e.target.value)}>
-          <option value="all">All Programs</option>
-          <option value="BSIT">BSIT</option><option value="BSCS">BSCS</option><option value="BSIS">BSIS</option>
         </Sel>
         <button className="btn-primary whitespace-nowrap" onClick={() => setExportOpen(true)} disabled={exporting}>
           {exporting ? 'Exporting...' : 'Export PDF'}
@@ -477,20 +469,19 @@ export default function Dashboard() {
             <table className="w-full">
               <thead>
                 <tr className="bg-psu-deep">
-                  {['Name','Batch','Status','Course'].map(h => (
+                  {['Name','Batch','Status'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-white/60 uppercase tracking-widest">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filteredAlumni.slice(0, 5).length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-10 text-slate-400 text-[13px]">No alumni match the selected filters.</td></tr>
+                  <tr><td colSpan={3} className="text-center py-10 text-slate-400 text-[13px]">No alumni match the selected filters.</td></tr>
                 ) : filteredAlumni.slice(0, 5).map(a => (
                   <tr key={a.id} className="tbl-row border-t border-slate-100">
                     <td className="px-4 py-3 font-semibold text-slate-700 text-[13px]">{a.first_name} {a.last_name}</td>
                     <td className="px-4 py-3 text-[12px] font-mono text-psu font-semibold">{a.batch_year}</td>
                     <td className="px-4 py-3"><span className={`badge text-[10px] ${STATUS_BADGE[a.employment_status] || ''}`}>{a.employment_status}</span></td>
-                    <td className="px-4 py-3 text-[12px] text-slate-500">{a.course}</td>
                   </tr>
                 ))}
               </tbody>

@@ -18,19 +18,18 @@ const GRID = 'rgba(214,224,245,0.45)'
 export default function Analytics() {
   const { toast } = useToast()
   const [batchFilter, setBatchFilter] = useState('all')
-  const [programFilter, setProgramFilter] = useState('all')
   const [alumni, setAlumni] = useState([])
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [kpis, setKpis] = useState({ total_alumni: 0, total_projects: 0, employment_rate: 0, award_winning: 0, implemented_rate: 0 })
   const [exportOpen, setExportOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [exportSel, setExportSel] = useState({ metrics: true, radar: true, trend: true, awards: true, program: true })
+  const [exportSel, setExportSel] = useState({ metrics: true, radar: true, trend: true, awards: true, employment: true })
 
   const radarRef = useRef(null)
   const trendRef = useRef(null)
   const awardsRef = useRef(null)
-  const programRef = useRef(null)
+  const employmentRef = useRef(null)
   const instances = useRef({})
 
   // Export capture refs
@@ -38,14 +37,14 @@ export default function Analytics() {
   const refRadarCard = useRef(null)
   const refTrendCard = useRef(null)
   const refAwardsCard = useRef(null)
-  const refProgramCard = useRef(null)
+  const refEmploymentCard = useRef(null)
 
   const exportItems = [
     { key: 'metrics', label: 'Key Metrics', ref: refMetricsCard },
     { key: 'radar', label: 'Batch Radar Comparison', ref: refRadarCard },
     { key: 'trend', label: 'Implementation Rate Trend', ref: refTrendCard },
     { key: 'awards', label: 'Awards by Project Category', ref: refAwardsCard },
-    { key: 'program', label: 'Employment by Program', ref: refProgramCard },
+    { key: 'employment', label: 'Employment Status', ref: refEmploymentCard },
   ]
 
   useEffect(() => {
@@ -62,9 +61,8 @@ export default function Analytics() {
 
   const filteredAlumni = useMemo(() => alumni.filter(a => {
     const passYear = batchFilter === 'all' || a.batch_year === batchFilter
-    const passProgram = programFilter === 'all' || a.course === programFilter
-    return passYear && passProgram
-  }), [alumni, batchFilter, programFilter])
+    return passYear
+  }), [alumni, batchFilter])
 
   const filteredProjects = useMemo(() => projects.filter(p => {
     return batchFilter === 'all' || p.year === batchFilter
@@ -147,12 +145,11 @@ export default function Analytics() {
     }
   }, [filteredProjects])
 
-  const employedByProgram = useMemo(() => {
+  const employmentStatusData = useMemo(() => {
     const counts = {}
     for (const a of filteredAlumni) {
-      if (a.employment_status !== 'Employed') continue
-      const course = a.course || 'Other'
-      counts[course] = (counts[course] || 0) + 1
+      const status = a.employment_status || 'Unknown'
+      counts[status] = (counts[status] || 0) + 1
     }
     const labels = Object.keys(counts)
     return {
@@ -233,23 +230,22 @@ export default function Analytics() {
       })
     }
 
-    if (programRef.current) {
-      destroy('program')
-      instances.current.program = new Chart(programRef.current, {
-        type: 'pie',
+    if (employmentRef.current) {
+      destroy('employment')
+      instances.current.employment = new Chart(employmentRef.current, {
+        type: 'doughnut',
         data: {
-          labels: employedByProgram.labels,
-          datasets: [{ data: employedByProgram.values, backgroundColor: ['rgba(10,61,143,0.85)', 'rgba(212,168,0,0.85)', 'rgba(13,138,94,0.85)', 'rgba(107,63,160,0.85)'], borderWidth: 0, hoverOffset: 10 }],
+          labels: employmentStatusData.labels,
+          datasets: [{ data: employmentStatusData.values, backgroundColor: ['rgba(10,61,143,0.85)', 'rgba(212,168,0,0.85)', 'rgba(13,138,94,0.85)', 'rgba(107,63,160,0.85)', 'rgba(0,119,182,0.85)'], borderWidth: 0, hoverOffset: 10 }],
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } } },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '64%', plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } } },
       })
     }
 
     return () => Object.keys(instances.current).forEach(destroy)
-  }, [selectedYears, perYear, trendYears, trendValues, awardByCategory, employedByProgram])
+  }, [selectedYears, perYear, trendYears, trendValues, awardByCategory, employmentStatusData])
 
   const batchLabel = batchFilter === 'all' ? 'all batches' : `batch ${batchFilter}`
-  const programLabel = programFilter === 'all' ? 'all programs' : programFilter
 
   const toggleExport = (key) => setExportSel(s => ({ ...s, [key]: !s[key] }))
   const setAllExport = (value) => setExportSel(exportItems.reduce((acc, item) => {
@@ -340,16 +336,10 @@ export default function Analytics() {
 
   return (
     <div className="animate-fade-up">
-      <SectionHead title="Performance Analytics" sub={`Deep-dive metrics for ${batchLabel} · ${programLabel}`}>
+      <SectionHead title="Performance Analytics" sub={`Deep-dive metrics for ${batchLabel}`}>
         <Sel value={batchFilter} onChange={e => setBatchFilter(e.target.value)}>
           <option value="all">All Batches</option>
           {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-        </Sel>
-        <Sel value={programFilter} onChange={e => setProgramFilter(e.target.value)}>
-          <option value="all">All Programs</option>
-          <option value="BSIT">BSIT</option>
-          <option value="BSCS">BSCS</option>
-          <option value="BSIS">BSIS</option>
         </Sel>
         <button className="btn-primary whitespace-nowrap" onClick={() => setExportOpen(true)} disabled={exporting}>
           {exporting ? 'Exporting...' : 'Export PDF'}
@@ -426,10 +416,10 @@ export default function Analytics() {
             <div className="p-5"><div style={{ height: 220 }}><canvas ref={awardsRef} /></div></div>
           </Card>
         </div>
-        <div ref={refProgramCard}>
+        <div ref={refEmploymentCard}>
           <Card>
-            <CardHead title="Employment by Program" sub="Employed alumni grouped by course" />
-            <div className="p-5"><div style={{ height: 220 }}><canvas ref={programRef} /></div></div>
+            <CardHead title="Employment Status" sub="Alumni grouped by employment status" />
+            <div className="p-5"><div style={{ height: 220 }}><canvas ref={employmentRef} /></div></div>
           </Card>
         </div>
       </div>

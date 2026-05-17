@@ -8,7 +8,6 @@ ALUMNI_FIELDS = [
     "first_name",
     "last_name",
     "batch_year",
-    "course",
     "email",
     "contact",
     "employment_status",
@@ -16,7 +15,7 @@ ALUMNI_FIELDS = [
 ]
 
 ALUMNI_SELECT = (
-    "id,first_name,last_name,batch_year,course,email,contact,employment_status,company,created_at"
+    "id,first_name,last_name,batch_year,email,contact,employment_status,company,created_at"
 )
 
 
@@ -28,17 +27,14 @@ def list_alumni():
     # Optional filters
     batch = request.args.get("batch")
     status = request.args.get("status")
-    course = request.args.get("course")
     search = request.args.get("q")
 
     if batch:
         query = query.eq("batch_year", batch)
     if status:
         query = query.eq("employment_status", status)
-    if course:
-        query = query.eq("course", course)
     if search:
-        query = query.or_(f"first_name.ilike.%{search}%,last_name.ilike.%{search}%,course.ilike.%{search}%,batch_year.ilike.%{search}%")
+        query = query.or_(f"first_name.ilike.%{search}%,last_name.ilike.%{search}%,batch_year.ilike.%{search}%")
 
     result = query.execute()
     return jsonify(result.data)

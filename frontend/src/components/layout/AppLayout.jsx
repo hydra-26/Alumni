@@ -22,6 +22,13 @@ const NAV = [
   },
 ]
 
+const DATA_NAV = {
+  group: 'Data Tools',
+  items: [
+    { to: '/upload', label: 'Upload Data', icon: <UploadIcon /> },
+  ],
+}
+
 const ADMIN_NAV = {
   group: 'Administration',
   items: [
@@ -35,6 +42,7 @@ const PAGE_META = {
   '/analytics': { name: 'Analytics',         crumb: 'PSU · APPAS · Performance Analytics' },
   '/alumni':    { name: 'Alumni Records',    crumb: 'PSU · APPAS · Records' },
   '/projects':  { name: 'Projects',          crumb: 'PSU · APPAS · Records' },
+  '/upload':    { name: 'Upload Data',       crumb: 'PSU · APPAS · Data Tools' },
   '/reports':   { name: 'Export Reports',    crumb: 'PSU · APPAS · Reports' },
   '/users':     { name: 'User Management',   crumb: 'PSU · APPAS · Administration' },
   '/system':    { name: 'User Activity Logs',  crumb: 'PSU · APPAS · Administration' },
@@ -69,7 +77,11 @@ export default function AppLayout() {
     navigate('/login')
   }
 
-  const allNav = isAdmin ? [...NAV, ADMIN_NAV] : NAV
+  const allNav = [
+    ...NAV,
+    ...(canManageData ? [DATA_NAV] : []),
+    ...(isAdmin ? [ADMIN_NAV] : []),
+  ]
 
   return (
     <div className="flex min-h-screen">
@@ -174,6 +186,7 @@ function GridIcon()    { return <svg fill="none" stroke="currentColor" strokeWid
 function PulseIcon()   { return <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-full h-full"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> }
 function UsersIcon()   { return <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-full h-full"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> }
 function BookIcon()    { return <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-full h-full"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> }
+function UploadIcon()  { return <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-full h-full"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> }
 function FileIcon()    { return <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-full h-full"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> }
 function UserIcon()    { return <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-full h-full"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg> }
 function CogIcon()     { return <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-full h-full"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2M12 20v2M2 12h2M20 12h2M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41"/></svg> }
