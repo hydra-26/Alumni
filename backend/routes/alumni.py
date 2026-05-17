@@ -61,6 +61,43 @@ def create_alumnus():
     return jsonify(result.data[0]), 201
 
 
+@alumni_bp.post("/bulk")
+def create_alumni_bulk():
+    data = request.get_json() or []
+    if not isinstance(data, list) or not data:
+        return jsonify({"error": "No records provided"}), 400
+    # Normalize payloads to allowed fields only
+    payloads = []
+    for item in data:
+        payloads.append({key: item.get(key) for key in ALUMNI_FIELDS})
+
+    sb = get_supabase()
+    # Log upload initiation with user identity when available
+    user_identity = request.headers.get('X-User') or 'unknown'
+    try:
+        log_audit(f"Upload initiated by {user_identity}: {len(payloads)} alumni rows", color=AUDIT_COLORS["alumni"], sb=sb)
+    except Exception:
+        pass
+
+    result = sb.table("alumni").insert(payloads).execute()
+    inserted = result.data or []
+    # Record upload history
+    try:
+        actor = request.headers.get('X-User') or 'unknown'
+        file_name = request.headers.get('X-File-Name')
+        sb.table('upload_history').insert({
+            'dataset': 'alumni',
+            'rows_count': len(inserted),
+            'actor': actor,
+            'file_name': file_name,
+        }).execute()
+    except Exception:
+        pass
+
+    log_audit(f"Uploaded {len(inserted)} alumni records", color=AUDIT_COLORS["alumni"], sb=sb)
+    return jsonify({"inserted": len(inserted), "data": inserted}), 201
+
+
 @alumni_bp.put("/<int:alumnus_id>")
 def update_alumnus(alumnus_id):
     data = request.get_json() or {}

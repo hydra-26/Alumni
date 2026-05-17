@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 // ═══════════════════════════════
 
 // KPI Card
-export function KpiCard({ icon, label, value, trend, trendUp, color = 'blue' }) {
+export function KpiCard({ icon, label, value, comparison, trend, trendUp, color = 'blue' }) {
   const colors = {
     blue:   { bar: 'bg-psu',        icon: 'bg-blue-50 text-psu',      val: 'text-psu' },
     gold:   { bar: 'bg-gold',       icon: 'bg-amber-50 text-gold-dark', val: 'text-gold-dark' },
@@ -14,6 +14,9 @@ export function KpiCard({ icon, label, value, trend, trendUp, color = 'blue' }) 
     red:    { bar: 'bg-red-500',    icon: 'bg-red-50 text-red-600',    val: 'text-red-600' },
   }
   const c = colors[color] || colors.blue
+  const comparisonState = comparison?.state || (trend ? 'value' : null)
+  const comparisonText = comparison?.text || trend
+  const comparisonUp = comparison?.up ?? trendUp
   return (
     <div className="bg-white rounded-2xl border border-blue-100 shadow-card p-5 relative overflow-hidden
                     hover:-translate-y-0.5 hover:shadow-panel transition-all duration-200">
@@ -21,12 +24,19 @@ export function KpiCard({ icon, label, value, trend, trendUp, color = 'blue' }) 
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl mb-4 ${c.icon}`}>{icon}</div>
       <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.08em] mb-1">{label}</p>
       <p className={`font-display text-3xl font-bold leading-none ${c.val}`}>{value}</p>
-      {trend && (
+      {comparisonState && (
         <p className="text-[11px] text-slate-400 mt-2">
-          <span className={trendUp ? 'text-emerald-600 font-semibold' : 'text-red-500 font-semibold'}>
-            {trendUp ? '↑' : '↓'} {trend}
-          </span>
-          {' '}vs last period
+          {comparisonState === 'na' ? (
+            <span className="font-semibold text-slate-400">N/A</span>
+          ) : (
+            <span className={comparisonUp ? 'text-emerald-600 font-semibold' : 'text-red-500 font-semibold'}>
+              <span className="inline-flex items-center gap-1">
+                <span aria-hidden>{comparisonUp ? '↑' : '↓'}</span>
+                <span>{comparisonText}</span>
+              </span>
+              <span className="text-slate-400 font-normal">{' '}vs last year</span>
+            </span>
+          )}
         </p>
       )}
     </div>
@@ -181,13 +191,13 @@ export function Modal({ open, onClose, title, children, footer, panelClassName =
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4"
          style={{ background: 'rgba(5,31,74,0.5)', backdropFilter: 'blur(3px)' }}
          onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className={`modal-enter bg-white rounded-2xl w-full max-w-[560px] max-h-[90vh] overflow-y-auto shadow-[0_25px_60px_rgba(0,0,0,0.25)] border border-slate-100 ${panelClassName}`}>
+      <div className={`modal-enter bg-white rounded-2xl w-full max-w-[560px] max-h-[90vh] flex flex-col overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.25)] border border-slate-100 ${panelClassName}`}>
         <div className="px-7 py-5 border-b border-slate-100 flex items-center justify-between">
           <h2 className="font-display text-[17px] text-psu">{title}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-red-500 hover:bg-red-50 w-8 h-8 rounded-lg flex items-center justify-center text-lg transition-all duration-150">✕</button>
         </div>
-        <div className={`px-7 py-6 ${bodyClassName}`}>{children}</div>
-        {footer && <div className="px-7 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-end gap-2">{footer}</div>}
+        <div className={`px-7 py-6 flex-1 overflow-y-auto ${bodyClassName}`}>{children}</div>
+        {footer && <div className="px-7 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex-shrink-0 flex justify-end gap-2">{footer}</div>}
       </div>
     </div>,
     document.body

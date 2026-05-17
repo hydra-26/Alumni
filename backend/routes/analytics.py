@@ -83,6 +83,17 @@ def audit_logs():
     return jsonify(result.data or [])
 
 
+@analytics_bp.get("/upload-history")
+def upload_history():
+    sb = get_supabase()
+    dataset = request.args.get('dataset')
+    query = sb.table('upload_history').select('*').order('created_at', desc=True).limit(100)
+    if dataset:
+        query = query.eq('dataset', dataset)
+    result = query.execute()
+    return jsonify(result.data or [])
+
+
 @analytics_bp.post("/audit-logs")
 def create_audit_log():
     data = request.get_json(silent=True) or {}

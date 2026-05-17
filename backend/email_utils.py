@@ -92,9 +92,8 @@ def send_user_credentials_email(*, to_email: str | None, name: str, username: st
         f"Hello {display_name},\n\n"
         "Your APPAS account has been created. You can sign in using the details below:\n\n"
         f"System link: {system_url}\n"
-        f"Username: {login_id}\n"
+        f"Email: {login_id}\n"
         f"Password: {password or ''}\n\n"
-        f"Role: {role or ''}\n\n"
         "If you did not expect this email, please ignore it."
     )
 
@@ -130,6 +129,81 @@ def send_user_credentials_email(*, to_email: str | None, name: str, username: st
     except Exception as exc:
         if debug:
             print(f"EMAIL_DEBUG: SMTP send failed: {type(exc).__name__}: {exc}")
+        return False
+
+    return True
+
+
+def send_password_reset_email(*, to_email: str | None, name: str, verification_code: str, system_url: str) -> bool:
+    debug = _truthy(os.environ.get("EMAIL_DEBUG"))
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_pass = os.environ.get("SMTP_PASS")
+    brevo_api_key = os.environ.get("BREVO_API_KEY")
+    if not to_email:
+        return False
+    if not smtp_host or not smtp_user or not smtp_pass:
+        if not brevo_api_key:
+            if debug:
+                print(
+                    "EMAIL_DEBUG: Missing email config for password reset:",
+                    {
+                        "smtp_host": bool(smtp_host),
+                        "smtp_user": bool(smtp_user),
+                        "smtp_pass": bool(smtp_pass),
+                        "brevo_api_key": bool(brevo_api_key),
+                        "to_email": bool(to_email),
+                    },
+                )
+            return False
+
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_from = os.environ.get("SMTP_FROM") or smtp_user
+    use_ssl = _truthy(os.environ.get("SMTP_USE_SSL"))
+    use_tls = _truthy(os.environ.get("SMTP_USE_TLS", "true"))
+
+    display_name = name or to_email
+    subject = "Verify your APPAS password reset"
+    text_body = (
+        f"Hello {display_name},\n\n"
+        "We received a request to reset your APPAS account password.\n\n"
+        f"Verification code: {verification_code}\n\n"
+        f"Open the sign-in page here: {system_url}\n"
+        "Enter the code in the Forgot Password modal, verify your email, then set a new password.\n\n"
+        "If you did not request this change, you can safely ignore this email."
+    )
+
+    if brevo_api_key:
+        return _send_via_brevo_api(
+            api_key=brevo_api_key,
+            to_email=to_email,
+            display_name=display_name,
+            sender_value=smtp_from,
+            subject=subject,
+            text_body=text_body,
+            debug=debug,
+        )
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = smtp_from
+    msg["To"] = to_email
+    msg.set_content(text_body)
+
+    try:
+        if use_ssl:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15) as server:
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+                if use_tls:
+                    server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+    except Exception as exc:
+        if debug:
+            print(f"EMAIL_DEBUG: SMTP reset email failed: {type(exc).__name__}: {exc}")
         return False
 
     return True

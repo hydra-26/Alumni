@@ -156,7 +156,7 @@ export default function UsersPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-psu-deep">
-                {['User','Username','Role','Last Login','Status','Actions'].map(h => (
+                {['User','Email','Username','Role','Actions'].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-white/60 uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -171,10 +171,10 @@ export default function UsersPage() {
                         <div className="h-3.5 w-28 bg-slate-100 rounded" />
                       </div>
                     </td>
+                    <td className="px-4 py-3"><div className="h-3 w-28 bg-slate-100 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-3 w-20 bg-slate-100 rounded" /></td>
                     <td className="px-4 py-3"><div className="h-5 w-20 bg-slate-100 rounded-full" /></td>
-                    <td className="px-4 py-3"><div className="h-3 w-16 bg-slate-100 rounded" /></td>
-                    <td className="px-4 py-3"><div className="h-5 w-16 bg-slate-100 rounded-full" /></td>
+                    
                     <td className="px-4 py-3">
                       <div className="flex gap-1.5">
                         <div className="w-8 h-8 rounded-lg bg-slate-100" />
@@ -184,7 +184,7 @@ export default function UsersPage() {
                   </tr>
                 ))
               ) : paginated.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-slate-400 text-[13px]">No users found.</td></tr>
+                <tr><td colSpan={5} className="text-center py-12 text-slate-400 text-[13px]">No users found.</td></tr>
               ) : paginated.map((u, i) => (
                 <tr key={u.id} className="tbl-row border-t border-slate-100 cursor-pointer hover:bg-slate-50" onClick={() => openDetail(u)}>
                   <td className="px-4 py-3">
@@ -193,10 +193,9 @@ export default function UsersPage() {
                       <span className="font-semibold text-slate-800 text-[13px]">{u.first_name} {u.last_name}</span>
                     </div>
                   </td>
+                  <td className="px-4 py-3 text-[13px] text-slate-700">{u.email}</td>
                   <td className="px-4 py-3 text-[11px] font-mono text-slate-400">{u.username}</td>
                   <td className="px-4 py-3"><StatusBadge status={u.role} /></td>
-                  <td className="px-4 py-3 text-[11px] font-mono text-slate-400">{u.last_login || '—'}</td>
-                  <td className="px-4 py-3"><StatusBadge status={u.status || 'Active'} /></td>
                   <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                     <div className="flex gap-1.5">
                       <IconBtn title="Edit" onClick={() => openEdit(u)}>✏️</IconBtn>
@@ -283,20 +282,7 @@ export default function UsersPage() {
                 </div>
               </div>
             </div>
-            {/* System Info */}
-            <div>
-              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">System Information</div>
-              <div className="space-y-2.5">
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <div className="text-[10px] text-slate-500 font-semibold mb-0.5">Account Created</div>
-                  <div className="text-[13px] text-slate-700">{selectedUser.created_at ? new Date(selectedUser.created_at).toLocaleDateString() : '—'}</div>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <div className="text-[10px] text-slate-500 font-semibold mb-0.5">Last Login</div>
-                  <div className="text-[13px] text-slate-700">{selectedUser.last_login ? new Date(selectedUser.last_login).toLocaleDateString() : 'Never'}</div>
-                </div>
-              </div>
-            </div>
+            
           </div>
         )}
       </Modal>

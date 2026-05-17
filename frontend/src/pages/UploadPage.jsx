@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import api from '../utils/api'
 import { useAuth } from '../context/AuthContext'
@@ -10,9 +10,10 @@ const DATASETS = {
   alumni: {
     label: 'Alumni Records',
     route: '/alumni/',
+    bulkRoute: '/alumni/bulk',
     auditLabel: 'alumni records',
-    expectedColumns: ['batch', 'first_name', 'last_name', 'email', 'contact_number', 'employment_status', 'company'],
-    requiredColumns: ['batch', 'first_name', 'last_name', 'employment_status'],
+    expectedColumns: ['batch_year', 'first_name', 'last_name', 'email', 'contact', 'employment_status', 'company'],
+    requiredColumns: ['batch_year', 'first_name', 'last_name', 'employment_status'],
     valueChecks: {
       employment_status: ['Seeking', 'Self-Employed', 'Employed', 'Studying'],
     },
@@ -20,12 +21,13 @@ const DATASETS = {
   projects: {
     label: 'Projects',
     route: '/projects/',
+    bulkRoute: '/projects/bulk',
     auditLabel: 'project records',
-    expectedColumns: ['project_title', 'category', 'year', 'adviser', 'members', 'implementation_status', 'award', 'project_link', 'abstract'],
-    requiredColumns: ['project_title', 'category', 'year', 'implementation_status', 'abstract'],
+    expectedColumns: ['title', 'category', 'year', 'adviser', 'members', 'status', 'award', 'project_link', 'abstract'],
+    requiredColumns: ['title', 'category', 'year', 'status', 'abstract'],
     valueChecks: {
       category: ['Web App', 'Mobile App', 'IoT System', 'Data Analytics', 'Desktop App'],
-      implementation_status: ['Implemented', 'In Progress', 'Proposed', 'Awarded'],
+      status: ['Implemented', 'In Progress', 'Proposed', 'Awarded'],
     },
   },
 }
@@ -42,6 +44,35 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false)
 
   const dataset = DATASETS[datasetKey]
+
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState(null)
+
+  useEffect(() => {
+    let mounted = true
+    const loadHistory = async () => {
+      setHistoryLoading(true)
+      setHistoryError(null)
+      try {
+        const res = await api.get('/analytics/upload-history')
+        const rows = (res.data || [])
+        if (mounted) setHistory(rows)
+      } catch (err) {
+        if (mounted) setHistoryError('Failed to load upload history')
+      } finally {
+        if (mounted) setHistoryLoading(false)
+      }
+    }
+
+    void loadHistory()
+    const onRecordsChanged = () => { void loadHistory() }
+    window.addEventListener('records:changed', onRecordsChanged)
+    return () => {
+      mounted = false
+      window.removeEventListener('records:changed', onRecordsChanged)
+    }
+  }, [])
 
   if (!canManageData) {
     return (
@@ -141,6 +172,39 @@ export default function UploadPage() {
 
   const openFileDialog = () => fileInputRef.current?.click()
 
+  const clearSelectedFile = () => {
+    setPreview(null)
+    setPreviewOpen(false)
+    setErrorOpen(false)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const openPreview = () => {
+    if (!preview) {
+      toast('Choose a file first to preview its contents.', 'info')
+      return
+    }
+
+    setPreviewOpen(true)
+  }
+
+  const downloadTemplate = () => {
+    const templateHeaders = dataset.expectedColumns
+    const worksheet = XLSX.utils.aoa_to_sheet([templateHeaders])
+    const workbook = XLSX.utils.book_new()
+    const sheetName = datasetKey === 'alumni' ? 'Alumni Template' : 'Projects Template'
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+
+    worksheet['!cols'] = templateHeaders.map(column => ({ wch: Math.max(column.length + 2, 16) }))
+
+    XLSX.writeFile(workbook, `${sheetName.replace(/\s+/g, '_')}.xlsx`)
+    toast(`${dataset.label} template downloaded.`, 'success')
+    void logAudit(`Downloaded ${dataset.auditLabel} template`, '#0d8a5e')
+  }
+
   const startUpload = async () => {
     if (!preview) return
     if (preview.hasColumnIssues) return
@@ -151,18 +215,30 @@ export default function UploadPage() {
 
     setUploading(true)
     try {
-      for (const row of preview.parsedRows) {
-        const payload = buildPayload(datasetKey, row.values)
-        await api.post(dataset.route, payload)
+      const payloads = preview.parsedRows.map(row => buildPayload(datasetKey, row.values))
+      const batchSize = 200
+
+      if (dataset.bulkRoute) {
+        for (let i = 0; i < payloads.length; i += batchSize) {
+          const batch = payloads.slice(i, i + batchSize)
+          await api.post(dataset.bulkRoute, batch, { headers: { 'X-File-Name': preview.fileName } })
+        }
+      } else {
+        for (const payload of payloads) {
+          await api.post(dataset.route, payload, { headers: { 'X-File-Name': preview.fileName } })
+        }
       }
 
       toast(`${preview.parsedRows.length} ${dataset.auditLabel} uploaded successfully.`, 'success')
       void logAudit(`Uploaded ${preview.parsedRows.length} ${dataset.auditLabel}`, '#0d8a5e')
+      // Notify layout to refresh record counts
+      window.dispatchEvent(new CustomEvent('records:changed', { detail: { dataset: datasetKey } }))
       setPreviewOpen(false)
       setErrorOpen(false)
       setPreview(null)
     } catch (error) {
-      toast(error?.response?.data?.error || 'Upload failed. Please check the file and try again.', 'error')
+      console.error('Upload error', error)
+      toast(error?.response?.data?.error || error?.message || 'Upload failed. Please check the file and try again.', 'error')
     } finally {
       setUploading(false)
     }
@@ -216,16 +292,40 @@ export default function UploadPage() {
               />
             </div>
 
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Selected file</div>
+                  <div className="text-[13px] font-semibold text-slate-700 break-words">
+                    {preview?.fileName || 'No file chosen'}
+                  </div>
+                </div>
+                {preview?.fileName && (
+                  <button
+                    type="button"
+                    onClick={clearSelectedFile}
+                    className="w-7 h-7 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 flex items-center justify-center text-sm transition-colors flex-shrink-0"
+                    aria-label="Clear selected file"
+                    title="Clear selected file"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="flex flex-wrap gap-2">
               <button className="btn-primary" onClick={openFileDialog}>Choose File</button>
-              <button className="btn-ghost" onClick={() => toast('Template download is not configured yet.', 'info')}>Template</button>
+              <button className="btn-ghost" onClick={openPreview}>Preview</button>
+              <button className="btn-ghost" onClick={downloadTemplate}>Template</button>
             </div>
           </div>
         </Card>
 
-        <Card>
-          <CardHead title="Expected columns" sub="Validation is case-insensitive" />
-          <div className="p-5 space-y-4">
+        <div className="space-y-6">
+          <Card>
+            <CardHead title="Expected columns" sub="Validation is case-insensitive" />
+            <div className="p-5 space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Required columns</div>
               <div className="flex flex-wrap gap-2">
@@ -242,7 +342,7 @@ export default function UploadPage() {
             ) : (
               <>
                 <ValidationHint title="Category" values={DATASETS.projects.valueChecks.category} />
-                <ValidationHint title="Implementation status" values={DATASETS.projects.valueChecks.implementation_status} />
+                <ValidationHint title="Status" values={DATASETS.projects.valueChecks.status} />
               </>
             )}
 
@@ -251,15 +351,50 @@ export default function UploadPage() {
                 ? 'The imported file is validated against the alumni template before upload.'
                 : 'Rows are mapped into the existing project fields before they are saved.'}
             </div>
-          </div>
-        </Card>
+            </div>
+          </Card>
+        </div>
       </div>
+
+      <Card>
+        <CardHead title="Upload history" sub="Recent uploads for selected dataset" />
+        <div className="p-5 space-y-3">
+          {historyLoading ? (
+            <div className="text-[13px] text-slate-500">Loading…</div>
+          ) : historyError ? (
+            <div className="text-[13px] text-red-600">{historyError}</div>
+          ) : history.length === 0 ? (
+            <div className="text-[13px] text-slate-500">No recent uploads found for this dataset.</div>
+          ) : (
+            <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+                  {history.map(item => {
+                    const datasetLabel = item.dataset === 'alumni' ? 'Alumni' : item.dataset === 'projects' ? 'Projects' : (item.dataset || detectDatasetFromAction(item.action))
+                    const actionText = item.file_name ? `${item.file_name} — ${item.rows_count} rows` : `Uploaded ${item.rows_count} rows`
+                    return (
+                      <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-3 flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <div className="text-[13px] text-slate-700">{actionText}</div>
+                            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${datasetLabel === 'Alumni' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : datasetLabel === 'Projects' ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'bg-slate-50 text-slate-600 border border-slate-200'}`}>
+                              {datasetLabel}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-1">{new Date(item.created_at).toLocaleString()}</div>
+                        </div>
+                        <div className="text-[12px] text-slate-500">{item.actor}</div>
+                      </div>
+                    )
+                  })}
+            </div>
+          )}
+        </div>
+      </Card>
 
       <Modal
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
         title={`Preview: ${dataset.label}`}
-        panelClassName="max-w-[1080px]"
+        panelClassName="max-w-[1160px]"
         footer={
           <>
             <button className="btn-ghost" onClick={() => setPreviewOpen(false)}>Close</button>
@@ -470,24 +605,24 @@ function buildPayload(datasetKey, values) {
     return {
       first_name: String(values.first_name ?? '').trim(),
       last_name: String(values.last_name ?? '').trim(),
-      batch_year: String(values.batch ?? '').trim(),
+      batch_year: String(values.batch_year ?? '').trim(),
       email: emptyToNull(values.email),
-      contact: emptyToNull(values.contact_number),
+      contact: emptyToNull(values.contact),
       employment_status: employmentStatus,
       company: emptyToNull(values.company),
     }
   }
 
   const category = matchAllowedValue(values.category, DATASETS.projects.valueChecks.category)
-  const implementationStatus = matchAllowedValue(values.implementation_status, DATASETS.projects.valueChecks.implementation_status)
+  const projectStatus = matchAllowedValue(values.status, DATASETS.projects.valueChecks.status)
 
   return {
-    title: String(values.project_title ?? '').trim(),
+    title: String(values.title ?? '').trim(),
     category,
     year: String(values.year ?? '').trim(),
     adviser: emptyToNull(values.adviser),
     members: emptyToNull(values.members),
-    status: implementationStatus,
+    status: projectStatus,
     award: emptyToNull(values.award),
     project_link: emptyToNull(values.project_link),
     abstract: String(values.abstract ?? '').trim(),
@@ -507,4 +642,15 @@ function emptyToNull(value) {
 function matchAllowedValue(value, allowedValues) {
   const matched = allowedValues.find(option => normalizeValue(option) === normalizeValue(value))
   return matched || String(value ?? '').trim()
+}
+
+function detectDatasetFromAction(action) {
+  const a = String(action || '').toLowerCase()
+  if (a.includes('alumni')) return 'Alumni'
+  if (a.includes('project')) return 'Projects'
+  if (a.includes('uploaded') && a.includes('rows')) {
+    if (a.includes('alumni')) return 'Alumni'
+    if (a.includes('project')) return 'Projects'
+  }
+  return 'Other'
 }

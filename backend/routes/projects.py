@@ -61,6 +61,43 @@ def create_project():
     return jsonify(result.data[0]), 201
 
 
+@projects_bp.post("/bulk")
+def create_projects_bulk():
+    data = request.get_json() or []
+    if not isinstance(data, list) or not data:
+        return jsonify({"error": "No records provided"}), 400
+
+    payloads = []
+    for item in data:
+        payloads.append({key: item.get(key) for key in PROJECT_FIELDS})
+
+    sb = get_supabase()
+    # Log upload initiation with user identity when available
+    user_identity = request.headers.get('X-User') or 'unknown'
+    try:
+        log_audit(f"Upload initiated by {user_identity}: {len(payloads)} project rows", color=AUDIT_COLORS["project"], sb=sb)
+    except Exception:
+        pass
+
+    result = sb.table("projects").insert(payloads).execute()
+    inserted = result.data or []
+    # Record upload history
+    try:
+        actor = request.headers.get('X-User') or 'unknown'
+        file_name = request.headers.get('X-File-Name')
+        sb.table('upload_history').insert({
+            'dataset': 'projects',
+            'rows_count': len(inserted),
+            'actor': actor,
+            'file_name': file_name,
+        }).execute()
+    except Exception:
+        pass
+
+    log_audit(f"Uploaded {len(inserted)} project records", color=AUDIT_COLORS["project"], sb=sb)
+    return jsonify({"inserted": len(inserted), "data": inserted}), 201
+
+
 @projects_bp.put("/<int:project_id>")
 def update_project(project_id):
     data = request.get_json(silent=True) or {}

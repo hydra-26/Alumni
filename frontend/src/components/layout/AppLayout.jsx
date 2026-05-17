@@ -1,9 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import api from '../../utils/api'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
+import { Modal } from '../ui'
 import logoDash from '../../assets/logo-dash.svg'
+
+const PASSWORD_RULES = [
+  { key: 'length', label: 'At least 8 characters', test: (value) => value.length >= 8 },
+  { key: 'upper', label: 'One uppercase letter', test: (value) => /[A-Z]/.test(value) },
+  { key: 'lower', label: 'One lowercase letter', test: (value) => /[a-z]/.test(value) },
+  { key: 'number', label: 'One number', test: (value) => /\d/.test(value) },
+  { key: 'special', label: 'One special character', test: (value) => /[^A-Za-z\d]/.test(value) },
+]
 
 const NAV = [
   {
@@ -53,9 +62,21 @@ export default function AppLayout() {
   const { toast } = useToast()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const profileMenuRef = useRef(null)
   const [counts, setCounts] = useState({ alumni: 0, projects: 0 })
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [changeLoading, setChangeLoading] = useState(false)
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [changeForm, setChangeForm] = useState({ currentPassword: '', password: '', confirmPassword: '' })
   const meta = PAGE_META[pathname] || { name: 'APPAS', crumb: 'PSU · APPAS' }
   const initials = user ? (user.name.split(' ').map(n => n[0]).slice(0, 2).join('')) : 'U'
+
+  const passwordChecks = PASSWORD_RULES.map(rule => ({ ...rule, passed: rule.test(changeForm.password) }))
+  const passwordsMatch = changeForm.password.length > 0 && changeForm.password === changeForm.confirmPassword
+  const canChangePassword = Boolean(changeForm.currentPassword.trim()) && passwordChecks.every(rule => rule.passed) && passwordsMatch
 
   useEffect(() => {
     api.get('/analytics/kpis')
@@ -69,9 +90,97 @@ export default function AppLayout() {
       .catch(() => setCounts({ alumni: 0, projects: 0 }))
   }, [])
 
+  useEffect(() => {
+    const refreshCounts = () => {
+      api.get('/analytics/kpis')
+        .then(r => {
+          const data = r.data || {}
+          setCounts({
+            alumni: Number(data.total_alumni) || 0,
+            projects: Number(data.total_projects) || 0,
+          })
+        })
+        .catch(() => {})
+    }
+
+    window.addEventListener('records:changed', refreshCounts)
+    return () => window.removeEventListener('records:changed', refreshCounts)
+  }, [])
+
+  useEffect(() => {
+    const handleMouseDown = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setProfileMenuOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setProfileMenuOpen(false)
+        setChangePasswordOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
   const formatCount = (value) => (value > 999 ? '999+' : String(value))
 
+  const resetChangePasswordForm = () => {
+    setChangeForm({ currentPassword: '', password: '', confirmPassword: '' })
+    setShowCurrentPassword(false)
+    setShowNewPassword(false)
+    setShowConfirmPassword(false)
+    setChangeLoading(false)
+  }
+
+  const openChangePasswordModal = () => {
+    setProfileMenuOpen(false)
+    setChangePasswordOpen(true)
+  }
+
+  const closeChangePasswordModal = () => {
+    setChangePasswordOpen(false)
+    resetChangePasswordForm()
+  }
+
+  const handleChangePassword = async () => {
+    if (!changeForm.currentPassword.trim()) {
+      toast('Enter your current password.', 'error')
+      return
+    }
+    if (!passwordChecks.every(rule => rule.passed)) {
+      toast('Please complete all new password requirements.', 'error')
+      return
+    }
+    if (!passwordsMatch) {
+      toast('New password and confirmation must match.', 'error')
+      return
+    }
+
+    setChangeLoading(true)
+    try {
+      await api.post('/auth/password-change', {
+        current_password: changeForm.currentPassword,
+        password: changeForm.password,
+        confirm_password: changeForm.confirmPassword,
+      })
+      toast('Password changed successfully.', 'success')
+      closeChangePasswordModal()
+    } catch (error) {
+      toast(error?.response?.data?.error || 'Unable to change password.', 'error')
+    } finally {
+      setChangeLoading(false)
+    }
+  }
+
   const doLogout = () => {
+    setProfileMenuOpen(false)
     logout()
     toast('Signed out successfully', 'info')
     navigate('/login')
@@ -134,17 +243,41 @@ export default function AppLayout() {
         </nav>
 
         {/* User footer */}
-        <div className="px-4 py-4 border-t border-gold/10 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-[13px] text-psu-deep"
-               style={{ background: 'linear-gradient(135deg, #f5c518, #d4a800)', border: '2px solid rgba(245,197,24,0.3)' }}>
+        <div ref={profileMenuRef} className="relative px-4 py-4 border-t border-gold/10 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setProfileMenuOpen(v => !v)}
+            aria-haspopup="menu"
+            aria-expanded={profileMenuOpen}
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-[13px] text-psu-deep transition-transform duration-150 hover:scale-105"
+            style={{ background: 'linear-gradient(135deg, #f5c518, #d4a800)', border: '2px solid rgba(245,197,24,0.3)' }}
+          >
             {initials}
-          </div>
+          </button>
           <div className="flex-1 min-w-0">
             <div className="text-white/85 text-[12px] font-semibold truncate">{user?.name}</div>
             <div className={`text-[10px] font-semibold mt-0.5 ${isAdmin ? 'text-gold' : 'text-sky-300'}`}>
               {user?.role}
             </div>
           </div>
+          {profileMenuOpen && (
+            <div className="absolute bottom-[calc(100%+12px)] left-4 w-[220px] rounded-2xl border border-slate-100 bg-white shadow-[0_18px_45px_rgba(0,0,0,0.22)] overflow-hidden">
+              <button
+                type="button"
+                onClick={openChangePasswordModal}
+                className="w-full px-4 py-3 text-left text-[13px] font-semibold text-slate-700 hover:bg-blue-50 hover:text-psu transition-colors"
+              >
+                Change Password
+              </button>
+              <button
+                type="button"
+                onClick={doLogout}
+                className="w-full px-4 py-3 text-left text-[13px] font-semibold text-slate-700 hover:bg-red-50 hover:text-red-600 transition-colors border-t border-slate-100"
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
           <button onClick={doLogout} title="Sign Out"
                   className="text-white/25 hover:text-red-400 p-1.5 rounded-lg transition-colors duration-150">
             <LogoutIcon />
@@ -177,6 +310,100 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      <Modal
+        open={changePasswordOpen}
+        onClose={closeChangePasswordModal}
+        title="Change Password"
+        panelClassName="max-w-[620px]"
+        bodyClassName="space-y-5"
+      >
+        <div className="pb-1">
+          <p className="text-slate-500 text-[14px]">
+            Enter your current password and choose a new password.
+          </p>
+        </div>
+
+        <PasswordField
+          label="Current Password"
+          value={changeForm.currentPassword}
+          onChange={(value) => setChangeForm(form => ({ ...form, currentPassword: value }))}
+          placeholder="Current password"
+          visible={showCurrentPassword}
+          onToggle={() => setShowCurrentPassword(v => !v)}
+        />
+
+        <PasswordField
+          label="New Password"
+          value={changeForm.password}
+          onChange={(value) => setChangeForm(form => ({ ...form, password: value }))}
+          placeholder="Create a strong password"
+          visible={showNewPassword}
+          onToggle={() => setShowNewPassword(v => !v)}
+        />
+
+        <PasswordField
+          label="Confirm Password"
+          value={changeForm.confirmPassword}
+          onChange={(value) => setChangeForm(form => ({ ...form, confirmPassword: value }))}
+          placeholder="Re-type new password"
+          visible={showConfirmPassword}
+          onToggle={() => setShowConfirmPassword(v => !v)}
+        />
+
+        <div className="space-y-2 text-[13px]">
+          {passwordChecks.map(rule => (
+            <div
+              key={rule.key}
+              className={`flex items-center gap-2 ${rule.passed ? 'text-emerald-600' : 'text-slate-400'}`}
+            >
+              {rule.passed ? <CheckIcon /> : <CircleIcon />}
+              <span>{rule.label}</span>
+            </div>
+          ))}
+          <div className={`flex items-center gap-2 ${passwordsMatch ? 'text-emerald-600' : 'text-slate-400'}`}>
+            {passwordsMatch ? <CheckIcon /> : <CircleIcon />}
+            <span>Passwords match</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleChangePassword}
+          disabled={!canChangePassword || changeLoading}
+          className={canChangePassword
+            ? 'w-full bg-psu text-white font-bold text-[15px] py-3.5 rounded-xl transition-all duration-150 hover:opacity-95'
+            : 'w-full bg-slate-300 text-white font-bold text-[15px] py-3.5 rounded-xl transition-all duration-150 disabled:opacity-70 disabled:cursor-not-allowed'
+          }
+        >
+          {changeLoading ? 'Updating...' : 'Change Password'}
+        </button>
+      </Modal>
+    </div>
+  )
+}
+
+function PasswordField({ label, value, onChange, placeholder, visible, onToggle }) {
+  return (
+    <div>
+      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{label}</label>
+      <div className="relative">
+        <input
+          type={visible ? 'text' : 'password'}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 pr-12 text-[15px] text-slate-800 outline-none placeholder-slate-400 focus:border-psu focus:ring-2 focus:ring-blue-100"
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={visible ? 'Hide password' : 'Show password'}
+          className="absolute inset-y-0 right-0 w-11 flex items-center justify-center text-slate-500 hover:text-psu transition-colors"
+        >
+          {visible ? <EyeOffIcon /> : <EyeIcon />}
+        </button>
+      </div>
     </div>
   )
 }
@@ -194,3 +421,7 @@ function LogoutIcon()  { return <svg width="14" height="14" fill="none" stroke="
 function PlusIcon()    { return <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> }
 function DownloadIcon(){ return <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> }
 function InfoIcon()    { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> }
+function EyeIcon()     { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" /><circle cx="12" cy="12" r="3" /></svg> }
+function EyeOffIcon()   { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a21.8 21.8 0 0 1 5.06-6.94" /><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.63" /><line x1="1" y1="1" x2="23" y2="23" /></svg> }
+function CheckIcon()   { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg> }
+function CircleIcon()  { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /></svg> }

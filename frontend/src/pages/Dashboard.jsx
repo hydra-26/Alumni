@@ -124,6 +124,69 @@ export default function Dashboard() {
     }
   }, [filteredAlumni, filteredProjects])
 
+  const kpisByYear = useMemo(() => {
+    const byYear = {}
+
+    for (const year of availableYears) {
+      const yearAlumni = alumni.filter(a => a.batch_year === year)
+      const yearProjects = projects.filter(p => p.year === year)
+      const alumniTotal = yearAlumni.length
+      const projectsTotal = yearProjects.length
+      const employed = yearAlumni.filter(a => a.employment_status === 'Employed').length
+      const implemented = yearProjects.filter(p => p.status === 'Implemented').length
+      const awarded = yearProjects.filter(p => p.status === 'Awarded').length
+
+      byYear[year] = {
+        total_alumni: alumniTotal,
+        total_projects: projectsTotal,
+        employment_rate: alumniTotal ? Math.round((employed / alumniTotal) * 100) : 0,
+        award_winning: awarded,
+        implemented_rate: projectsTotal ? Math.round((implemented / projectsTotal) * 100) : 0,
+      }
+    }
+
+    return byYear
+  }, [availableYears, alumni, projects])
+
+  const metricComparisons = useMemo(() => {
+    const emptyComparison = { state: 'na' }
+
+    if (yearFilter === 'all') {
+      return {
+        total_alumni: emptyComparison,
+        total_projects: emptyComparison,
+        employment_rate: emptyComparison,
+        award_winning: emptyComparison,
+        implemented_rate: emptyComparison,
+      }
+    }
+
+    const currentYear = kpisByYear[yearFilter]
+    const previousYearKey = String(Number(yearFilter) - 1)
+    const previousYear = kpisByYear[previousYearKey]
+
+    const buildComparison = (currentValue, previousValue) => {
+      if (currentYear == null || previousYear == null || previousValue == null || previousValue === 0) {
+        return emptyComparison
+      }
+
+      const change = ((currentValue - previousValue) / previousValue) * 100
+      return {
+        state: 'value',
+        up: change >= 0,
+        text: `${Math.abs(change).toFixed(2)}%`,
+      }
+    }
+
+    return {
+      total_alumni: buildComparison(currentYear?.total_alumni ?? 0, previousYear?.total_alumni ?? 0),
+      total_projects: buildComparison(currentYear?.total_projects ?? 0, previousYear?.total_projects ?? 0),
+      employment_rate: buildComparison(currentYear?.employment_rate ?? 0, previousYear?.employment_rate ?? 0),
+      award_winning: buildComparison(currentYear?.award_winning ?? 0, previousYear?.award_winning ?? 0),
+      implemented_rate: buildComparison(currentYear?.implemented_rate ?? 0, previousYear?.implemented_rate ?? 0),
+    }
+  }, [yearFilter, kpisByYear])
+
   // Calculate filtered chart data
   const projectYears = useMemo(() => {
     const yearSet = new Set()
@@ -395,11 +458,11 @@ export default function Dashboard() {
       {/* KPIs */}
       <div ref={refMetricsCard}>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-          <KpiCard icon="🎓" label="Total Alumni"    value={displayKpis.total_alumni}                  trend="filtered" trendUp={false} color="blue" />
-          <KpiCard icon="📁" label="Total Projects"  value={displayKpis.total_projects}                trend="filtered" trendUp={false} color="gold" />
-          <KpiCard icon="💼" label="Employment Rate" value={`${displayKpis.employment_rate}%`}         trend="filtered" trendUp={false} color="green" />
-          <KpiCard icon="🏆" label="Award-Winning"   value={displayKpis.award_winning}                 trend="filtered" trendUp={false} color="violet" />
-          <KpiCard icon="🚀" label="Implemented"     value={`${displayKpis.implemented_rate}%`}        trend="filtered" trendUp={false} color="red" />
+          <KpiCard icon="🎓" label="Total Alumni"    value={displayKpis.total_alumni}           comparison={metricComparisons.total_alumni} color="blue" />
+          <KpiCard icon="📁" label="Total Projects"  value={displayKpis.total_projects}         comparison={metricComparisons.total_projects} color="gold" />
+          <KpiCard icon="💼" label="Employment Rate" value={`${displayKpis.employment_rate}%`}  comparison={metricComparisons.employment_rate} color="green" />
+          <KpiCard icon="🏆" label="Award-Winning"   value={displayKpis.award_winning}          comparison={metricComparisons.award_winning} color="violet" />
+          <KpiCard icon="🚀" label="Implemented"     value={`${displayKpis.implemented_rate}%`} comparison={metricComparisons.implemented_rate} color="red" />
         </div>
       </div>
 

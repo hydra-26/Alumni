@@ -87,6 +87,7 @@ export default function AlumniPage() {
       }
       setModal(false)
       await load()
+      window.dispatchEvent(new CustomEvent('records:changed', { detail: { dataset: 'alumni' } }))
     } catch { toast('Failed to save record.', 'error') }
   }
 
@@ -96,6 +97,7 @@ export default function AlumniPage() {
       toast('Record deleted.', 'success')
       setDelModal(false)
       await load()
+      window.dispatchEvent(new CustomEvent('records:changed', { detail: { dataset: 'alumni' } }))
     } catch { toast('Delete failed.', 'error') }
   }
 

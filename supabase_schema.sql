@@ -54,6 +54,16 @@ create table if not exists audit_logs (
   created_at timestamptz not null default now()
 );
 
+-- UPLOAD HISTORY TABLE
+create table if not exists upload_history (
+  id         bigserial primary key,
+  dataset    text not null,
+  rows_count integer not null default 0,
+  actor      text not null,
+  file_name  text,
+  created_at timestamptz not null default now()
+);
+
 -- ─── SEED: Default Admin User ───────────────────
 insert into users (first_name, last_name, username, email, password, role, responsibility, status)
 values

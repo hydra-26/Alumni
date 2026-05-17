@@ -93,6 +93,7 @@ export default function ProjectsPage() {
       }
       setModal(false)
       await load()
+      window.dispatchEvent(new CustomEvent('records:changed', { detail: { dataset: 'projects' } }))
     } catch { toast('Failed to save project.', 'error') }
   }
 
@@ -102,6 +103,7 @@ export default function ProjectsPage() {
       toast('Project deleted.', 'success')
       setDelModal(false)
       await load()
+      window.dispatchEvent(new CustomEvent('records:changed', { detail: { dataset: 'projects' } }))
     } catch { toast('Delete failed.', 'error') }
   }
 
