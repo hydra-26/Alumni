@@ -63,14 +63,13 @@ export const exportAuditLogsToExcel = (data, filename = 'User_Activity_Logs.xlsx
     'Action': record.action || '',
     'Actor': record.actor || '',
     'Date/Time': record.created_at ? new Date(record.created_at).toLocaleString('en-PH') : '',
-    'Color': record.color || '',
   }))
 
   const worksheet = XLSX.utils.json_to_sheet(exportData)
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Activity Logs')
 
-  const colWidths = [50, 18, 22, 12]
+  const colWidths = [50, 18, 22]
   worksheet['!cols'] = colWidths.map(w => ({ wch: w }))
 
   XLSX.writeFile(workbook, filename)

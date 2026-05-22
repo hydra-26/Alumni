@@ -9,7 +9,7 @@ import {
   StatusBadge, Pagination, Modal, FormGroup, DeleteModal
 } from '../components/ui'
 
-const EMPTY = { first_name:'', last_name:'', batch_year:'2025', email:'', contact:'', employment_status:'Seeking', company:'' }
+const EMPTY = { first_name:'', last_name:'', batch_year:'', email:'', contact:'', employment_status:'Seeking', company:'' }
 const STATUSES = ['Employed','Self-Employed','Seeking','Studying']
 
 export default function AlumniPage() {
@@ -237,9 +237,14 @@ export default function AlumniPage() {
           <FormGroup label="Last Name"><input className="field" value={form.last_name} onChange={F('last_name')} placeholder="Last name" /></FormGroup>
 
           <FormGroup label="Batch Year">
-            <select className="field" value={form.batch_year} onChange={F('batch_year')}>
-              {uniqueBatchYears.map(y => <option key={y}>{y}</option>)}
-            </select>
+            <input
+              className="field"
+              type="text"
+              inputMode="numeric"
+              value={form.batch_year}
+              onChange={F('batch_year')}
+              placeholder="e.g. 2025"
+            />
           </FormGroup>
 
           <FormGroup label="Email Address"><input className="field" type="email" value={form.email} onChange={F('email')} placeholder="student@psu.edu.ph" /></FormGroup>

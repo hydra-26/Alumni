@@ -9,7 +9,7 @@ import {
   StatusBadge, Pagination, Modal, FormGroup, DeleteModal
 } from '../components/ui'
 
-const EMPTY = { title:'', category:'Web App', year:'2025', adviser:'', members:'', status:'In Progress', award:'', abstract:'', project_link:'' }
+const EMPTY = { title:'', category:'Web App', year:'', adviser:'', members:'', status:'In Progress', award:'', abstract:'', project_link:'' }
 const CATEGORIES = ['Web App','Mobile App','IoT System','Data Analytics','Desktop App']
 const STATUSES   = ['Implemented','In Progress','Proposed','Awarded']
 
@@ -257,9 +257,14 @@ export default function ProjectsPage() {
             </select>
           </FormGroup>
           <FormGroup label="Year">
-            <select className="field" value={form.year} onChange={F('year')}>
-              {uniqueYears.map(y => <option key={y}>{y}</option>)}
-            </select>
+            <input
+              className="field"
+              type="text"
+              inputMode="numeric"
+              value={form.year}
+              onChange={F('year')}
+              placeholder="e.g. 2025"
+            />
           </FormGroup>
 
           <FormGroup label="Adviser"><input className="field" value={form.adviser} onChange={F('adviser')} placeholder="Faculty adviser name" /></FormGroup>
