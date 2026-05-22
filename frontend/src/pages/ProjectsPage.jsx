@@ -174,7 +174,7 @@ export default function ProjectsPage() {
             {STATUSES.map(s => <option key={s}>{s}</option>)}
           </Sel>
           <Sel value={filterYear}   onChange={e => setFilterYear(e.target.value)}>
-            <option value="">All Years</option>
+            <option value="">All Batches</option>
             {uniqueYears.map(y => <option key={y}>{y}</option>)}
           </Sel>
         </div>

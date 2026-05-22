@@ -116,6 +116,20 @@ export function StatBox({ value, label }) {
   )
 }
 
+// Empty state for charts and cards
+export function NoDataState({ title = 'No Data Available' }) {
+  return (
+    <div className="flex h-full min-h-[180px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 text-center">
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none" aria-hidden="true">
+        <rect x="6" y="8" width="32" height="28" rx="6" fill="rgba(10,61,143,0.08)" stroke="#0a3d8f" strokeWidth="1.5" />
+        <path d="M13 29L18.5 22.5L23.5 26.5L30.5 18" stroke="#0a3d8f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="17" cy="16" r="2" fill="#d4a800" />
+      </svg>
+      <div className="text-[14px] font-semibold text-slate-500">{title}</div>
+    </div>
+  )
+}
+
 // Section header
 export function SectionHead({ title, sub, children }) {
   return (

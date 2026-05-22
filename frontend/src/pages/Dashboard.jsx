@@ -4,7 +4,7 @@ import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import api from '../utils/api'
 import { logAudit } from '../utils/audit'
-import { KpiCard, Card, CardHead, SectionHead, Sel, Modal } from '../components/ui'
+import { KpiCard, Card, CardHead, SectionHead, Sel, Modal, NoDataState } from '../components/ui'
 import { useToast } from '../context/ToastContext'
 import headerImg from '../assets/header.png'
 import footerImg from '../assets/footer.png'
@@ -250,6 +250,11 @@ export default function Dashboard() {
     const selfEmp = yearAlumni.filter(a => a.employment_status === 'Self-Employed').length
     return yearAlumni.length ? Math.round((selfEmp / yearAlumni.length) * 100) : 0
   }), [allAlumniYears, alumni])
+
+  const hasProjectChartData = projectYears.length > 0
+  const hasCategoryChartData = categoryLabels.length > 0
+  const hasAlumniTrendData = allAlumniYears.length > 0
+  const hasEmploymentTrendData = allAlumniYears.length > 0
 
   useEffect(() => {
     const destroy = (key) => { if (chartInstances.current[key]) { chartInstances.current[key].destroy(); delete chartInstances.current[key] } }
@@ -549,7 +554,7 @@ export default function Dashboard() {
     <div className="animate-fade-up">
       <SectionHead title="Performance Overview" sub={`Data Visualizations for Alumni and Projects`}>
         <Sel value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
-          <option value="all">All Years</option>
+          <option value="all">All Batches</option>
           {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
         </Sel>
         <button className="btn-primary whitespace-nowrap" onClick={() => setExportOpen(true)} disabled={exporting}>
@@ -610,13 +615,21 @@ export default function Dashboard() {
         <div ref={refProjectsCard}>
           <Card>
             <CardHead title="Projects Per Batch Year" sub="Annual submissions & awards" />
-            <div className="p-5"><div style={{ height: 240 }}><canvas ref={refProjects} /></div></div>
+            <div className="p-5">
+              <div style={{ height: 240 }}>
+                {hasProjectChartData ? <canvas ref={refProjects} /> : <NoDataState />}
+              </div>
+            </div>
           </Card>
         </div>
         <div ref={refCategoriesCard}>
           <Card>
             <CardHead title="Project Categories" sub="Distribution by type" />
-            <div className="p-5"><div style={{ height: 240 }}><canvas ref={refCategories} /></div></div>
+            <div className="p-5">
+              <div style={{ height: 240 }}>
+                {hasCategoryChartData ? <canvas ref={refCategories} /> : <NoDataState />}
+              </div>
+            </div>
           </Card>
         </div>
       </div>
@@ -626,7 +639,11 @@ export default function Dashboard() {
         <div ref={refAlumniTrendCard} className="lg:col-span-2">
           <Card>
             <CardHead title="Alumni Trend" sub="Total alumni per batch year" />
-            <div className="p-5"><div style={{ height: 200 }}><canvas ref={refAlumniTrend} /></div></div>
+            <div className="p-5">
+              <div style={{ height: 200 }}>
+                {hasAlumniTrendData ? <canvas ref={refAlumniTrend} /> : <NoDataState />}
+              </div>
+            </div>
           </Card>
         </div>
       </div>
@@ -636,7 +653,11 @@ export default function Dashboard() {
         <div ref={refEmploymentCard} className="lg:col-span-2">
           <Card>
             <CardHead title="Employment Trend" sub="Employed vs self-employed % by batch" />
-            <div className="p-5"><div style={{ height: 200 }}><canvas ref={refEmployment} /></div></div>
+            <div className="p-5">
+              <div style={{ height: 200 }}>
+                {hasEmploymentTrendData ? <canvas ref={refEmployment} /> : <NoDataState />}
+              </div>
+            </div>
           </Card>
         </div>
       </div>

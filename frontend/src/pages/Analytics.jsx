@@ -4,7 +4,7 @@ import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import api from '../utils/api'
 import { logAudit } from '../utils/audit'
-import { Card, CardHead, SectionHead, StatBox, Sel, Modal } from '../components/ui'
+import { Card, CardHead, SectionHead, StatBox, Sel, Modal, NoDataState } from '../components/ui'
 import { useToast } from '../context/ToastContext'
 import headerImg from '../assets/header.png'
 import footerImg from '../assets/footer.png'
@@ -177,6 +177,11 @@ export default function Analytics() {
       values: labels.map(l => counts[l]),
     }
   }, [filteredAlumni])
+
+  const hasStatusChartData = projectStatusData.labels.length > 0
+  const hasTrendChartData = trendYears.length > 0
+  const hasAwardsChartData = awardByCategory.labels.length > 0
+  const hasEmploymentChartData = employmentStatusData.labels.length > 0
 
   useEffect(() => {
     const destroy = (key) => {
@@ -499,13 +504,21 @@ export default function Analytics() {
         <div ref={refStatusCard}>
           <Card>
             <CardHead title="Project Status" sub="Projects grouped by status" />
-            <div className="p-5"><div style={{ height: 280 }}><canvas ref={statusRef} /></div></div>
+            <div className="p-5">
+              <div style={{ height: 280 }}>
+                {hasStatusChartData ? <canvas ref={statusRef} /> : <NoDataState />}
+              </div>
+            </div>
           </Card>
         </div>
         <div ref={refTrendCard}>
           <Card>
             <CardHead title="Implementation Rate Trend" sub="% of projects implemented per year" />
-            <div className="p-5"><div style={{ height: 280 }}><canvas ref={trendRef} /></div></div>
+            <div className="p-5">
+              <div style={{ height: 280 }}>
+                {hasTrendChartData ? <canvas ref={trendRef} /> : <NoDataState />}
+              </div>
+            </div>
           </Card>
         </div>
       </div>
@@ -514,13 +527,21 @@ export default function Analytics() {
         <div ref={refAwardsCard}>
           <Card>
             <CardHead title="Awards by Project Category" sub="Awarded projects grouped by category" />
-            <div className="p-5"><div style={{ height: 220 }}><canvas ref={awardsRef} /></div></div>
+            <div className="p-5">
+              <div style={{ height: 220 }}>
+                {hasAwardsChartData ? <canvas ref={awardsRef} /> : <NoDataState />}
+              </div>
+            </div>
           </Card>
         </div>
         <div ref={refEmploymentCard}>
           <Card>
             <CardHead title="Employment Status" sub="Alumni grouped by employment status" />
-            <div className="p-5"><div style={{ height: 220 }}><canvas ref={employmentRef} /></div></div>
+            <div className="p-5">
+              <div style={{ height: 220 }}>
+                {hasEmploymentChartData ? <canvas ref={employmentRef} /> : <NoDataState />}
+              </div>
+            </div>
           </Card>
         </div>
       </div>
