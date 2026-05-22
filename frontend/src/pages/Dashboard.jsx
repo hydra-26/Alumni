@@ -6,6 +6,8 @@ import api from '../utils/api'
 import { logAudit } from '../utils/audit'
 import { KpiCard, Card, CardHead, SectionHead, Sel, Modal } from '../components/ui'
 import { useToast } from '../context/ToastContext'
+import headerImg from '../assets/header.png'
+import footerImg from '../assets/footer.png'
 
 Chart.register(...registerables)
 Chart.defaults.font.family = "'Lexend', 'Noto Sans', 'Segoe UI', sans-serif"
@@ -44,6 +46,7 @@ export default function Dashboard() {
     metrics: true,
     projects: true,
     categories: true,
+    alumniTrend: true,
     employment: true,
     recentAlumni: true,
     recentProjects: true,
@@ -52,6 +55,7 @@ export default function Dashboard() {
   // Chart refs
   const refProjects   = useRef(null)
   const refCategories = useRef(null)
+  const refAlumniTrend = useRef(null)
   const refEmployment = useRef(null)
   const chartInstances = useRef({})
 
@@ -59,6 +63,7 @@ export default function Dashboard() {
   const refMetricsCard = useRef(null)
   const refProjectsCard = useRef(null)
   const refCategoriesCard = useRef(null)
+  const refAlumniTrendCard = useRef(null)
   const refEmploymentCard = useRef(null)
   const refRecentAlumniCard = useRef(null)
   const refRecentProjectsCard = useRef(null)
@@ -67,6 +72,7 @@ export default function Dashboard() {
     { key: 'metrics', label: 'Key Metrics', ref: refMetricsCard },
     { key: 'projects', label: 'Projects Per Batch Year', ref: refProjectsCard },
     { key: 'categories', label: 'Project Categories', ref: refCategoriesCard },
+    { key: 'alumniTrend', label: 'Alumni Trend', ref: refAlumniTrendCard },
     { key: 'employment', label: 'Employment Trend', ref: refEmploymentCard },
     { key: 'recentAlumni', label: 'Recent Alumni', ref: refRecentAlumniCard },
     { key: 'recentProjects', label: 'Recent Projects', ref: refRecentProjectsCard },
@@ -210,6 +216,8 @@ export default function Dashboard() {
   }, [filteredProjects])
   const categoryValues = useMemo(() => categoryLabels.map(cat => filteredProjects.filter(p => p.category === cat).length), [categoryLabels, filteredProjects])
 
+  const alumniCountTrend = useMemo(() => alumniYears.map(y => filteredAlumni.filter(a => a.batch_year === y).length), [alumniYears, filteredAlumni])
+
   const employedTrend = useMemo(() => alumniYears.map(y => {
     const yearAlumni = filteredAlumni.filter(a => a.batch_year === y)
     const employed = yearAlumni.filter(a => a.employment_status === 'Employed').length
@@ -221,6 +229,27 @@ export default function Dashboard() {
     const selfEmp = yearAlumni.filter(a => a.employment_status === 'Self-Employed').length
     return yearAlumni.length ? Math.round((selfEmp / yearAlumni.length) * 100) : 0
   }), [alumniYears, filteredAlumni])
+
+  // Unfiltered Alumni Trend and Employment Trend (not affected by year filter)
+  const allAlumniYears = useMemo(() => {
+    const yearSet = new Set()
+    for (const a of alumni) if (a.batch_year) yearSet.add(a.batch_year)
+    return Array.from(yearSet).sort((a, b) => Number(a) - Number(b))
+  }, [alumni])
+
+  const allAlumniCountTrend = useMemo(() => allAlumniYears.map(y => alumni.filter(a => a.batch_year === y).length), [allAlumniYears, alumni])
+
+  const allEmployedTrend = useMemo(() => allAlumniYears.map(y => {
+    const yearAlumni = alumni.filter(a => a.batch_year === y)
+    const employed = yearAlumni.filter(a => a.employment_status === 'Employed').length
+    return yearAlumni.length ? Math.round((employed / yearAlumni.length) * 100) : 0
+  }), [allAlumniYears, alumni])
+
+  const allSelfEmpTrend = useMemo(() => allAlumniYears.map(y => {
+    const yearAlumni = alumni.filter(a => a.batch_year === y)
+    const selfEmp = yearAlumni.filter(a => a.employment_status === 'Self-Employed').length
+    return yearAlumni.length ? Math.round((selfEmp / yearAlumni.length) * 100) : 0
+  }), [allAlumniYears, alumni])
 
   useEffect(() => {
     const destroy = (key) => { if (chartInstances.current[key]) { chartInstances.current[key].destroy(); delete chartInstances.current[key] } }
@@ -254,16 +283,39 @@ export default function Dashboard() {
       })
     }
 
+    // Alumni trend line
+    if (refAlumniTrend.current) {
+      destroy('alumniTrend')
+      chartInstances.current.alumniTrend = new Chart(refAlumniTrend.current, {
+        type: 'line',
+        data: {
+          labels: allAlumniYears,
+          datasets: [{
+            label: 'Alumni Count',
+            data: allAlumniCountTrend,
+            borderColor: PSU,
+            backgroundColor: 'rgba(10,61,143,0.08)',
+            tension: 0.35,
+            fill: true,
+            pointRadius: 4,
+            pointBackgroundColor: PSU,
+            borderWidth: 2.5,
+          }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 12 } } }, scales: { x: { grid: { color: GRID } }, y: { grid: { color: GRID }, ticks: { precision: 0 } } } },
+      })
+    }
+
     // Employment trend line
     if (refEmployment.current) {
       destroy('employment')
       chartInstances.current.employment = new Chart(refEmployment.current, {
         type: 'line',
         data: {
-          labels: alumniYears,
+          labels: allAlumniYears,
           datasets: [
-            { label: 'Employed %',      data: employedTrend, borderColor: PSU,  backgroundColor: 'rgba(10,61,143,0.07)', tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: PSU,  borderWidth: 2.5 },
-            { label: 'Self-Employed %', data: selfEmpTrend, borderColor: GOLD, backgroundColor: 'rgba(212,168,0,0.05)', tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: GOLD, borderWidth: 2.5 },
+            { label: 'Employed %',      data: allEmployedTrend, borderColor: PSU,  backgroundColor: 'rgba(10,61,143,0.07)', tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: PSU,  borderWidth: 2.5 },
+            { label: 'Self-Employed %', data: allSelfEmpTrend, borderColor: GOLD, backgroundColor: 'rgba(212,168,0,0.05)', tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: GOLD, borderWidth: 2.5 },
           ],
         },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 12 } } }, scales: { x: { grid: { color: GRID } }, y: { grid: { color: GRID } } } },
@@ -271,18 +323,7 @@ export default function Dashboard() {
     }
 
     return () => { Object.keys(chartInstances.current).forEach(destroy) }
-  }, [projectYears, totalsByYear, awardedByYear, categoryLabels, categoryValues, alumniYears, employedTrend, selfEmpTrend])
-
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  const vals = months.map((_, i) => filteredProjects.filter(p => {
-    if (!p.created_at) return false
-    return new Date(p.created_at).getMonth() === i
-  }).length)
-  const awarded = months.map((_, i) => filteredProjects.filter(p => {
-    if (!p.created_at) return false
-    return new Date(p.created_at).getMonth() === i && p.status === 'Awarded'
-  }).length)
-  const max = Math.max(1, ...vals)
+  }, [projectYears, totalsByYear, awardedByYear, categoryLabels, categoryValues, alumniYears, alumniCountTrend, employedTrend, selfEmpTrend, allAlumniYears, allAlumniCountTrend, allEmployedTrend, allSelfEmpTrend])
 
   const yearLabel = yearFilter === 'all' ? 'All Years' : yearFilter
   const toggleExport = (key) => setExportSel(s => ({ ...s, [key]: !s[key] }))
@@ -306,26 +347,132 @@ export default function Dashboard() {
 
     setExporting(true)
     try {
+      const loadImage = (src) => new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve(img)
+        img.onerror = reject
+        img.src = src
+      })
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
       const pageWidth = pdf.internal.pageSize.getWidth()
       const pageHeight = pdf.internal.pageSize.getHeight()
       const margin = 36
+      const titleFontSize = 16
+      const mainFontSize = 13
+      const metaFontSize = 11
+      const lineGap = 6
+      const exportTitle = 'Dashboard Report'
 
-      for (let i = 0; i < selected.length; i += 1) {
-        const node = selected[i].ref.current
-        const canvas = await html2canvas(node, { scale: 2, backgroundColor: '#ffffff' })
-        const imgData = canvas.toDataURL('image/png')
-        const maxWidth = pageWidth - margin * 2
-        const maxHeight = pageHeight - margin * 2
-        const ratio = Math.min(maxWidth / canvas.width, maxHeight / canvas.height)
-        const renderWidth = canvas.width * ratio
-        const renderHeight = canvas.height * ratio
-        const x = (pageWidth - renderWidth) / 2
-        const y = (pageHeight - renderHeight) / 2
+      const headerImage = await loadImage(headerImg).catch(() => null)
+      const footerImage = await loadImage(footerImg).catch(() => null)
+      const headerWidth = headerImage ? pageWidth : 0
+      const headerHeight = headerImage ? (headerImage.height / headerImage.width) * headerWidth : 0
+      const footerWidth = footerImage ? pageWidth : 0
+      const footerHeight = footerImage ? (footerImage.height / footerImage.width) * footerWidth : 0
+      const headerY = 0
+      const footerY = footerImage ? pageHeight - footerHeight : 0
 
-        if (i > 0) pdf.addPage()
-        pdf.addImage(imgData, 'PNG', x, y, renderWidth, renderHeight, undefined, 'FAST')
+      const drawPageFrame = () => {
+        if (headerImage) {
+          pdf.addImage(headerImage, 'PNG', 0, headerY, headerWidth, headerHeight, undefined, 'FAST')
+        }
+
+        if (footerImage) {
+          pdf.addImage(footerImage, 'PNG', 0, footerY, footerWidth, footerHeight, undefined, 'FAST')
+        }
+
+        let cursorY = margin + titleFontSize
+        if (headerImage) {
+          cursorY = headerY + headerHeight + 12 + titleFontSize
+        }
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(titleFontSize)
+        pdf.text(exportTitle, pageWidth / 2, cursorY, { align: 'center' })
+
+        cursorY += mainFontSize + lineGap
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(mainFontSize)
+        pdf.text('Performance Overview', pageWidth / 2, cursorY, { align: 'center' })
+
+        cursorY += metaFontSize + lineGap
+        pdf.setFontSize(metaFontSize)
+        pdf.text(`Data for ${yearLabel}`, pageWidth / 2, cursorY, { align: 'center' })
+
+        const contentTop = cursorY + metaFontSize + lineGap
+        const contentBottom = footerImage ? footerY - 12 : pageHeight - margin
+
+        return { contentTop, contentBottom }
       }
+
+      const gap = 12
+      const contentWidth = pageWidth - margin * 2
+      const fullWidthKeys = new Set(['metrics', 'alumniTrend', 'employment'])
+      const rows = []
+      const buffer = []
+
+      selected.forEach(item => {
+        if (fullWidthKeys.has(item.key)) {
+          if (buffer.length) {
+            rows.push({ items: [...buffer] })
+            buffer.length = 0
+          }
+          rows.push({ items: [item], fullWidth: true })
+        } else {
+          buffer.push(item)
+          if (buffer.length === 2) {
+            rows.push({ items: [...buffer] })
+            buffer.length = 0
+          }
+        }
+      })
+
+      if (buffer.length) {
+        rows.push({ items: [...buffer] })
+      }
+
+      const canvasMap = new Map()
+      for (const item of selected) {
+        const canvas = await html2canvas(item.ref.current, { scale: 2, backgroundColor: '#ffffff' })
+        canvasMap.set(item.key, canvas)
+      }
+
+      let { contentTop, contentBottom } = drawPageFrame()
+      let currentY = contentTop
+
+      rows.forEach((row) => {
+        const columns = row.items.length
+        const columnWidth = columns === 1 ? contentWidth : (contentWidth - gap) / 2
+        const canvases = row.items.map(item => canvasMap.get(item.key)).filter(Boolean)
+        const rowHeight = Math.max(...canvases.map(canvas => (canvas.height * columnWidth) / canvas.width))
+        const availableHeight = contentBottom - currentY
+
+        if (rowHeight > availableHeight && currentY !== contentTop) {
+          pdf.addPage()
+          const pageBounds = drawPageFrame()
+          contentTop = pageBounds.contentTop
+          contentBottom = pageBounds.contentBottom
+          currentY = contentTop
+        }
+
+        const adjustedAvailable = contentBottom - currentY
+        const rowScale = rowHeight > adjustedAvailable ? adjustedAvailable / rowHeight : 1
+        const scaledGap = gap * rowScale
+        const rowWidth = columnWidth * columns + gap * Math.max(0, columns - 1)
+        const scaledRowWidth = rowWidth * rowScale
+        const startX = (pageWidth - scaledRowWidth) / 2
+
+        canvases.forEach((canvas, colIndex) => {
+          const renderWidth = columnWidth * rowScale
+          const renderHeight = (canvas.height * columnWidth) / canvas.width * rowScale
+          const x = startX + colIndex * (renderWidth + scaledGap)
+          const y = currentY
+          const imgData = canvas.toDataURL('image/png')
+
+          pdf.addImage(imgData, 'PNG', x, y, renderWidth, renderHeight, undefined, 'FAST')
+        })
+
+        currentY += rowHeight * rowScale + scaledGap
+      })
 
       pdf.save(`dashboard-export-${Date.now()}.pdf`)
       setExportOpen(false)
@@ -342,8 +489,8 @@ export default function Dashboard() {
     return (
       <div className="animate-fade-up">
         <SectionHead title="Performance Overview" sub="Loading dashboard data..." />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-          {[1,2,3,4,5].map(i => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+          {[1,2,3,4].map(i => (
             <div key={i} className="rounded-2xl border border-blue-100 bg-white p-5 animate-pulse">
               <div className="h-2 w-20 bg-slate-100 rounded mb-4" />
               <div className="h-8 w-16 bg-slate-100 rounded mb-3" />
@@ -381,14 +528,7 @@ export default function Dashboard() {
 
         <Card className="mb-4">
           <CardHead title=" " sub=" " />
-          <div className="p-5 animate-pulse">
-            <div className="grid grid-cols-12 gap-1.5 mb-2">
-              {Array.from({ length: 12 }).map((_, i) => <div key={`hmh-${i}`} className="h-2 bg-slate-100 rounded" />)}
-            </div>
-            <div className="grid grid-cols-12 gap-1.5">
-              {Array.from({ length: 12 }).map((_, i) => <div key={`hm-${i}`} className="h-8 bg-slate-100 rounded" />)}
-            </div>
-          </div>
+          <div className="p-5 animate-pulse"><div className="h-[200px] bg-slate-100 rounded-xl" /></div>
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -407,7 +547,7 @@ export default function Dashboard() {
 
   return (
     <div className="animate-fade-up">
-      <SectionHead title="Performance Overview" sub={`Academic Year ${yearLabel} · Real-time`}>
+      <SectionHead title="Performance Overview" sub={`Data Visualizations for Alumni and Projects`}>
         <Sel value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
           <option value="all">All Years</option>
           {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
@@ -457,11 +597,10 @@ export default function Dashboard() {
 
       {/* KPIs */}
       <div ref={refMetricsCard}>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
           <KpiCard icon="🎓" label="Total Alumni"    value={displayKpis.total_alumni}           comparison={metricComparisons.total_alumni} color="blue" />
           <KpiCard icon="📁" label="Total Projects"  value={displayKpis.total_projects}         comparison={metricComparisons.total_projects} color="gold" />
           <KpiCard icon="💼" label="Employment Rate" value={`${displayKpis.employment_rate}%`}  comparison={metricComparisons.employment_rate} color="green" />
-          <KpiCard icon="🏆" label="Award-Winning"   value={displayKpis.award_winning}          comparison={metricComparisons.award_winning} color="violet" />
           <KpiCard icon="🚀" label="Implemented"     value={`${displayKpis.implemented_rate}%`} comparison={metricComparisons.implemented_rate} color="red" />
         </div>
       </div>
@@ -484,6 +623,16 @@ export default function Dashboard() {
 
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <div ref={refAlumniTrendCard} className="lg:col-span-2">
+          <Card>
+            <CardHead title="Alumni Trend" sub="Total alumni per batch year" />
+            <div className="p-5"><div style={{ height: 200 }}><canvas ref={refAlumniTrend} /></div></div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Charts Row 3 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div ref={refEmploymentCard} className="lg:col-span-2">
           <Card>
             <CardHead title="Employment Trend" sub="Employed vs self-employed % by batch" />
@@ -491,37 +640,6 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
-
-      {/* Heatmap */}
-      <Card className="mb-4">
-        <CardHead title="Monthly Project Activity" sub="Submission volume per month" />
-        <div className="p-5">
-          <div className="grid grid-cols-12 gap-1.5 mb-1">
-            {months.map(m => <div key={m} className="text-center text-[9px] text-slate-400 font-medium">{m}</div>)}
-          </div>
-          <div className="grid grid-cols-12 gap-1.5">
-            {vals.map((v, i) => {
-              const intensity = v / max
-              const bg = awarded[i]
-                ? `rgba(212,168,0,${0.15 + intensity * 0.65})`
-                : `rgba(10,61,143,${0.07 + intensity * 0.83})`
-              return (
-                <div key={i} className="hm-cell" style={{ background: bg }} title={`${months[i]}: ${v} projects${awarded[i] ? ' · Awarded month' : ''}`}>
-                  <span className="text-[9px] font-mono" style={{ color: intensity > 0.5 ? 'rgba(255,255,255,0.7)' : 'rgba(10,61,143,0.5)' }}>{v}</span>
-                </div>
-              )
-            })}
-          </div>
-          <div className="flex items-center gap-2 mt-3 text-[10px] text-slate-400 font-medium">
-            <span>Less</span>
-            {[0.07,0.25,0.45,0.65,0.9].map((o, i) => (
-              <div key={i} className="w-3.5 h-3.5 rounded" style={{ background: `rgba(10,61,143,${o})` }} />
-            ))}
-            <span>More</span>
-            <span className="ml-3 text-amber-600">▪ Gold = Awarded month</span>
-          </div>
-        </div>
-      </Card>
 
       {/* Recent tables */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -42,6 +42,7 @@ export default function UploadPage() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [errorOpen, setErrorOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [overrideDuplicateData, setOverrideDuplicateData] = useState(false)
 
   const dataset = DATASETS[datasetKey]
 
@@ -126,6 +127,10 @@ export default function UploadPage() {
       .filter(row => Object.values(row.values).some(value => String(value ?? '').trim() !== ''))
 
     const validationErrors = collectValidationErrors(datasetKey, parsedRows)
+    const existingRows = await fetchExistingRows(datasetKey)
+    const duplicateRows = collectDuplicateRows(datasetKey, parsedRows, existingRows)
+    const duplicateRowNumbers = new Set(duplicateRows.map(row => row.rowNumber))
+    const newRows = parsedRows.filter(row => !duplicateRowNumbers.has(row.rowNumber))
 
     return {
       fileName: file.name,
@@ -134,6 +139,8 @@ export default function UploadPage() {
       missingColumns,
       excessColumns,
       validationErrors,
+      duplicateRows,
+      newRows,
       previewRows: parsedRows.slice(0, 5),
       hasColumnIssues: missingColumns.length > 0 || excessColumns.length > 0,
     }
@@ -145,6 +152,7 @@ export default function UploadPage() {
 
     try {
       const parsed = await parseFile(file)
+      setOverrideDuplicateData(false)
       setPreview(parsed)
       setPreviewOpen(true)
       setErrorOpen(false)
@@ -162,6 +170,7 @@ export default function UploadPage() {
 
     try {
       const parsed = await parseFile(file)
+      setOverrideDuplicateData(false)
       setPreview(parsed)
       setPreviewOpen(true)
       setErrorOpen(false)
@@ -170,12 +179,19 @@ export default function UploadPage() {
     }
   }
 
+  const handleDatasetChange = (key) => {
+    if (key === datasetKey) return
+    setDatasetKey(key)
+    if (preview) clearSelectedFile()
+  }
+
   const openFileDialog = () => fileInputRef.current?.click()
 
   const clearSelectedFile = () => {
     setPreview(null)
     setPreviewOpen(false)
     setErrorOpen(false)
+    setOverrideDuplicateData(false)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -212,30 +228,36 @@ export default function UploadPage() {
       setErrorOpen(true)
       return
     }
+    if (preview.duplicateRows.length > 0 && !overrideDuplicateData) {
+      toast('Remove duplicate rows before uploading.', 'error')
+      return
+    }
 
     setUploading(true)
     try {
-      const payloads = preview.parsedRows.map(row => buildPayload(datasetKey, row.values))
-      const batchSize = 200
+      const rowsToUpload = preview.duplicateRows.length > 0 ? preview.newRows : preview.parsedRows
+      if (rowsToUpload.length === 0) {
+        toast('No new rows to upload.', 'info')
+        return
+      }
+      const payloads = rowsToUpload.map(row => buildPayload(datasetKey, row.values))
 
       if (dataset.bulkRoute) {
-        for (let i = 0; i < payloads.length; i += batchSize) {
-          const batch = payloads.slice(i, i + batchSize)
-          await api.post(dataset.bulkRoute, batch, { headers: { 'X-File-Name': preview.fileName } })
-        }
+        await api.post(dataset.bulkRoute, payloads, { headers: { 'X-File-Name': preview.fileName } })
       } else {
         for (const payload of payloads) {
           await api.post(dataset.route, payload, { headers: { 'X-File-Name': preview.fileName } })
         }
       }
 
-      toast(`${preview.parsedRows.length} ${dataset.auditLabel} uploaded successfully.`, 'success')
-      void logAudit(`Uploaded ${preview.parsedRows.length} ${dataset.auditLabel}`, '#0d8a5e')
+      toast(`${payloads.length} ${dataset.auditLabel} uploaded successfully.`, 'success')
+      void logAudit(`Uploaded ${payloads.length} ${dataset.auditLabel}`, '#0d8a5e')
       // Notify layout to refresh record counts
       window.dispatchEvent(new CustomEvent('records:changed', { detail: { dataset: datasetKey } }))
       setPreviewOpen(false)
       setErrorOpen(false)
       setPreview(null)
+      setOverrideDuplicateData(false)
     } catch (error) {
       console.error('Upload error', error)
       toast(error?.response?.data?.error || error?.message || 'Upload failed. Please check the file and try again.', 'error')
@@ -247,7 +269,6 @@ export default function UploadPage() {
   return (
     <div className="animate-fade-up space-y-6">
       <SectionHead title="Upload Data" sub="Import alumni or project records from a spreadsheet">
-        <Badge variant="gold">Chairperson only</Badge>
       </SectionHead>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -258,7 +279,7 @@ export default function UploadPage() {
               {Object.entries(DATASETS).map(([key, config]) => (
                 <button
                   key={key}
-                  onClick={() => setDatasetKey(key)}
+                  onClick={() => handleDatasetChange(key)}
                   className={`rounded-2xl border p-4 text-left transition-all duration-150 ${datasetKey === key
                     ? 'border-psu bg-blue-50 shadow-[0_10px_24px_rgba(10,61,143,0.08)]'
                     : 'border-slate-200 bg-white hover:border-slate-300'
@@ -317,7 +338,7 @@ export default function UploadPage() {
             <div className="flex flex-wrap gap-2">
               <button className="btn-primary" onClick={openFileDialog}>Choose File</button>
               <button className="btn-ghost" onClick={openPreview}>Preview</button>
-              <button className="btn-ghost" onClick={downloadTemplate}>Template</button>
+              <button className="btn-ghost" onClick={downloadTemplate}>Download Template</button>
             </div>
           </div>
         </Card>
@@ -394,15 +415,26 @@ export default function UploadPage() {
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
         title={`Preview: ${dataset.label}`}
-        panelClassName="max-w-[1160px]"
+        panelClassName="max-w-[1750px]"
         footer={
           <>
             <button className="btn-ghost" onClick={() => setPreviewOpen(false)}>Close</button>
+            {preview?.duplicateRows.length > 0 && (
+              <label className="flex items-center gap-2 text-[12px] text-slate-600 mr-auto select-none">
+                <input
+                  type="checkbox"
+                  checked={overrideDuplicateData}
+                  onChange={e => setOverrideDuplicateData(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-psu focus:ring-psu"
+                />
+                Override duplicate data
+              </label>
+            )}
             <button
               className="btn-primary"
               onClick={startUpload}
-              disabled={!preview || preview.hasColumnIssues || uploading}
-              style={{ opacity: (!preview || preview.hasColumnIssues || uploading) ? 0.6 : 1 }}
+              disabled={!preview || preview.hasColumnIssues || uploading || (preview.duplicateRows.length > 0 && !overrideDuplicateData)}
+              style={{ opacity: (!preview || preview.hasColumnIssues || uploading || (preview.duplicateRows.length > 0 && !overrideDuplicateData)) ? 0.6 : 1 }}
             >
               {uploading ? 'Uploading…' : 'Validate & Upload'}
             </button>
@@ -415,11 +447,61 @@ export default function UploadPage() {
               <SummaryTile label="File" value={preview.fileName} />
               <SummaryTile label="Rows found" value={String(preview.parsedRows.length)} />
               <SummaryTile label="Columns found" value={String(preview.headers.length)} />
+              <SummaryTile label="Duplicate rows" value={String(preview.duplicateRows.length)} />
+              <SummaryTile label="New rows" value={String(preview.newRows.length)} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <IssuePanel title="Missing columns" items={preview.missingColumns} emptyText="None" tone={preview.missingColumns.length ? 'warn' : 'ok'} />
               <IssuePanel title="Excess columns" items={preview.excessColumns} emptyText="None" tone={preview.excessColumns.length ? 'warn' : 'ok'} />
+            </div>
+
+            {preview.duplicateRows.length > 0 && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-widest text-red-700">Duplicate rows</div>
+                    <div className="text-[12px] text-slate-600 mt-1">
+                      These file rows already exist in the database and should be removed before uploading.
+                    </div>
+                  </div>
+                  <Badge variant="red">{preview.duplicateRows.length} found</Badge>
+                </div>
+                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                  {preview.duplicateRows.map(item => (
+                    <div key={item.rowNumber} className="rounded-xl border border-red-200 bg-white p-3 text-[12px] text-slate-700">
+                      <div className="font-semibold text-red-700">Row {item.rowNumber}</div>
+                      <div className="mt-1">
+                        Matches existing record{item.matches.length > 1 ? 's' : ''}: {item.matches.map(match => match.label).join(', ')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-widest text-emerald-700">New rows</div>
+                  <div className="text-[12px] text-slate-600 mt-1">
+                    Rows that do not yet exist in the database and will be inserted if you continue.
+                  </div>
+                </div>
+                <Badge variant="green">{preview.newRows.length} found</Badge>
+              </div>
+              <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                {preview.newRows.length === 0 ? (
+                  <div className="text-[12px] text-emerald-700 font-medium">No new rows found.</div>
+                ) : (
+                  preview.newRows.map(item => (
+                    <div key={item.rowNumber} className="rounded-xl border border-emerald-200 bg-white p-3 text-[12px] text-slate-700">
+                      <div className="font-semibold text-emerald-700">Row {item.rowNumber}</div>
+                      <div className="mt-1">This row will be inserted into the database.</div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 overflow-hidden">
@@ -441,14 +523,24 @@ export default function UploadPage() {
                           No data rows were found.
                         </td>
                       </tr>
-                    ) : preview.previewRows.map(row => (
-                      <tr key={row.rowNumber} className="border-t border-slate-100">
-                        <Td>{row.rowNumber}</Td>
-                        {dataset.expectedColumns.map(column => (
-                          <Td key={column}>{previewCellValue(datasetKey, row.values, column)}</Td>
-                        ))}
-                      </tr>
-                    ))}
+                    ) : preview.previewRows.map(row => {
+                      const duplicate = preview.duplicateRows.find(item => item.rowNumber === row.rowNumber)
+                      const isNew = preview.newRows.some(item => item.rowNumber === row.rowNumber)
+                      return (
+                        <tr key={row.rowNumber} className={`border-t border-slate-100 ${duplicate ? 'bg-red-50' : isNew ? 'bg-emerald-50' : ''}`}>
+                          <Td>
+                            <div className="flex items-center gap-2">
+                              <span>{row.rowNumber}</span>
+                              {duplicate && <Badge variant="red">Duplicate</Badge>}
+                              {isNew && <Badge variant="green">New</Badge>}
+                            </div>
+                          </Td>
+                          {dataset.expectedColumns.map(column => (
+                            <Td key={column}>{previewCellValue(datasetKey, row.values, column)}</Td>
+                          ))}
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -459,7 +551,9 @@ export default function UploadPage() {
                 ? 'Fix the missing or excess columns before uploading. The import button is disabled until the structure matches the template.'
                 : preview.validationErrors.length > 0
                   ? 'The file structure matches, but some rows contain invalid values. Open the error modal to review them.'
-                  : 'The file structure and row values are ready for upload.'}
+                  : preview.duplicateRows.length > 0
+                    ? 'Duplicate rows were found in the database. Check Override duplicate data to upload only the new rows.'
+                    : 'The file structure and row values are ready for upload.'}
             </div>
           </div>
         )}
@@ -563,6 +657,12 @@ function normalizeValue(value) {
   return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+async function fetchExistingRows(datasetKey) {
+  const route = DATASETS[datasetKey].route
+  const res = await api.get(route)
+  return Array.isArray(res.data) ? res.data : []
+}
+
 function collectValidationErrors(datasetKey, rows) {
   const checks = DATASETS[datasetKey].valueChecks
   const errors = []
@@ -597,6 +697,66 @@ function collectValidationErrors(datasetKey, rows) {
   })
 
   return errors
+}
+
+function collectDuplicateRows(datasetKey, rows, existingRows) {
+  const existingIndex = new Map()
+
+  existingRows.forEach(record => {
+    getDuplicateKeys(datasetKey, record).forEach(key => {
+      if (!key) return
+      if (!existingIndex.has(key)) existingIndex.set(key, [])
+      existingIndex.get(key).push(record)
+    })
+  })
+
+  return rows.reduce((accumulator, row) => {
+    const matchesById = new Map()
+
+    getDuplicateKeys(datasetKey, row.values).forEach(key => {
+      const matches = existingIndex.get(key) || []
+      matches.forEach(match => {
+        if (match?.id != null) matchesById.set(match.id, match)
+      })
+    })
+
+    if (matchesById.size > 0) {
+      accumulator.push({
+        rowNumber: row.rowNumber,
+        matches: Array.from(matchesById.values()).map(match => formatDuplicateMatch(datasetKey, match)),
+      })
+    }
+
+    return accumulator
+  }, [])
+}
+
+function getDuplicateKeys(datasetKey, values) {
+  if (datasetKey === 'alumni') {
+    const email = normalizeValue(values.email)
+    const fullName = [values.first_name, values.last_name, values.batch_year].map(normalizeValue).filter(Boolean).join('|')
+    const keys = []
+    if (email) keys.push(`email:${email}`)
+    if (fullName) keys.push(`name:${fullName}`)
+    return keys
+  }
+
+  const title = normalizeValue(values.title)
+  const year = normalizeValue(values.year)
+  if (!title || !year) return []
+  return [`title-year:${title}|${year}`]
+}
+
+function formatDuplicateMatch(datasetKey, record) {
+  if (datasetKey === 'alumni') {
+    const label = [record.first_name, record.last_name].filter(Boolean).join(' ').trim() || `Alumnus #${record.id}`
+    const descriptor = [record.batch_year, record.email].filter(Boolean).join(' • ')
+    return { id: record.id, label: descriptor ? `${label} (${descriptor})` : label }
+  }
+
+  const label = record.title || `Project #${record.id}`
+  const descriptor = [record.year, record.status].filter(Boolean).join(' • ')
+  return { id: record.id, label: descriptor ? `${label} (${descriptor})` : label }
 }
 
 function buildPayload(datasetKey, values) {

@@ -21,8 +21,10 @@ export function KpiCard({ icon, label, value, comparison, trend, trendUp, color 
     <div className="bg-white rounded-2xl border border-blue-100 shadow-card p-5 relative overflow-hidden
                     hover:-translate-y-0.5 hover:shadow-panel transition-all duration-200">
       <div className={`absolute top-0 left-0 right-0 h-[3px] rounded-t-2xl ${c.bar}`} />
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl mb-4 ${c.icon}`}>{icon}</div>
-      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.08em] mb-1">{label}</p>
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${c.icon}`}>{icon}</div>
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.08em]">{label}</p>
+      </div>
       <p className={`font-display text-3xl font-bold leading-none ${c.val}`}>{value}</p>
       {comparisonState && (
         <p className="text-[11px] text-slate-400 mt-2">
@@ -208,9 +210,9 @@ export function Modal({ open, onClose, title, children, footer, panelClassName =
 export function FormRow({ children }) {
   return <div className="grid grid-cols-2 gap-4">{children}</div>
 }
-export function FormGroup({ label, children }) {
+export function FormGroup({ label, children, className = '' }) {
   return (
-    <div className="flex flex-col gap-1.5 mb-4 last:mb-0">
+    <div className={`flex flex-col gap-1.5 mb-4 last:mb-0 ${className}`}>
       <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{label}</label>
       {children}
     </div>

@@ -16,6 +16,7 @@ export default function AlumniPage() {
   const { toast }   = useToast()
   const { canManageData, isAdmin } = useAuth()
   const [rows, setRows]     = useState([])
+  const [allRows, setAllRows] = useState([])
   const [search, setSearch] = useState('')
   const [filterBatch, setFilterBatch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -45,8 +46,19 @@ export default function AlumniPage() {
     }
   }
 
+  // Load full dataset once for computing filter dropdowns
+  const loadAll = async () => {
+    try {
+      const r = await api.get('/alumni/')
+      setAllRows(r.data || [])
+    } catch {
+      setAllRows([])
+    }
+  }
+
   useEffect(() => { load() }, [search, filterBatch, filterStatus])
   useEffect(() => { setPage(1) }, [search, filterBatch, filterStatus])
+  useEffect(() => { loadAll() }, [])
 
   const openAdd  = () => {
     if (!canManageData) return toast('View-only access: only Chairperson can add records.', 'info')
@@ -87,6 +99,7 @@ export default function AlumniPage() {
       }
       setModal(false)
       await load()
+      await loadAll()
       window.dispatchEvent(new CustomEvent('records:changed', { detail: { dataset: 'alumni' } }))
     } catch { toast('Failed to save record.', 'error') }
   }
@@ -97,6 +110,7 @@ export default function AlumniPage() {
       toast('Record deleted.', 'success')
       setDelModal(false)
       await load()
+      await loadAll()
       window.dispatchEvent(new CustomEvent('records:changed', { detail: { dataset: 'alumni' } }))
     } catch { toast('Delete failed.', 'error') }
   }
@@ -121,12 +135,12 @@ export default function AlumniPage() {
   const paginated = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE)
   
   const uniqueBatchYears = (() => {
-    const years = new Set(rows.map(r => r.batch_year).filter(Boolean))
+    const years = new Set(allRows.map(r => r.batch_year).filter(Boolean))
     return Array.from(years).sort((a, b) => b.localeCompare(a))
   })()
 
   const F = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
-  const showActionsColumn = !isAdmin
+  const showActionsColumn = canManageData
 
   return (
     <div className="animate-fade-up">

@@ -216,9 +216,9 @@ WARNING: Not found in codebase -- please fill in manually.
 
 ### 6.3 Analytics (Deep-Dive Charts)
 **What it does**
-- Batch radar comparison.
+- Project status chart.
 - Implementation rate trend.
-- Awards by category.
+- Awards by project category.
 - Employment status distribution.
 - PDF export for selected charts.
 

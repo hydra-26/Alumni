@@ -19,6 +19,7 @@ export default function ProjectsPage() {
   const { toast }   = useToast()
   const { canManageData, isAdmin } = useAuth()
   const [rows, setRows]     = useState([])
+  const [allRows, setAllRows] = useState([])
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat]       = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -49,8 +50,19 @@ export default function ProjectsPage() {
     }
   }
 
+  // load full dataset once for dropdown values
+  const loadAll = async () => {
+    try {
+      const r = await api.get('/projects/')
+      setAllRows(r.data || [])
+    } catch {
+      setAllRows([])
+    }
+  }
+
   useEffect(() => { load() }, [search, filterCat, filterStatus, filterYear])
   useEffect(() => { setPage(1) }, [search, filterCat, filterStatus, filterYear])
+  useEffect(() => { loadAll() }, [])
 
   const openAdd  = () => {
     if (!canManageData) return toast('View-only access: only Chairperson can add projects.', 'info')
@@ -93,6 +105,7 @@ export default function ProjectsPage() {
       }
       setModal(false)
       await load()
+      await loadAll()
       window.dispatchEvent(new CustomEvent('records:changed', { detail: { dataset: 'projects' } }))
     } catch { toast('Failed to save project.', 'error') }
   }
@@ -103,6 +116,7 @@ export default function ProjectsPage() {
       toast('Project deleted.', 'success')
       setDelModal(false)
       await load()
+      await loadAll()
       window.dispatchEvent(new CustomEvent('records:changed', { detail: { dataset: 'projects' } }))
     } catch { toast('Delete failed.', 'error') }
   }
@@ -128,12 +142,12 @@ export default function ProjectsPage() {
   const paginated = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE)
   
   const uniqueYears = (() => {
-    const years = new Set(rows.map(r => r.year).filter(Boolean))
+    const years = new Set(allRows.map(r => r.year).filter(Boolean))
     return Array.from(years).sort((a, b) => b.localeCompare(a))
   })()
 
   const F = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
-  const showActionsColumn = !isAdmin
+  const showActionsColumn = canManageData
 
   return (
     <div className="animate-fade-up">
@@ -235,9 +249,7 @@ export default function ProjectsPage() {
           <button className="btn-primary" onClick={save}>{editing ? 'Update' : 'Save'} Project</button>
         </>}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-          <div className="md:col-span-2">
-            <FormGroup label="Project Title"><input className="field" value={form.title} onChange={F('title')} placeholder="e.g. BarangayIS v2.0" /></FormGroup>
-          </div>
+          <FormGroup className="md:col-span-2" label="Project Title"><input className="field" value={form.title} onChange={F('title')} placeholder="e.g. BarangayIS v2.0" /></FormGroup>
 
           <FormGroup label="Category">
             <select className="field" value={form.category} onChange={F('category')}>
@@ -264,11 +276,9 @@ export default function ProjectsPage() {
             <input className="field" type="url" value={form.project_link || ''} onChange={F('project_link')} placeholder="https://example.com/project" />
           </FormGroup>
 
-          <div className="md:col-span-2">
-            <FormGroup label="Abstract">
-              <textarea className="field" rows={3} value={form.abstract} onChange={F('abstract')} placeholder="Brief description..." style={{ resize:'vertical' }} />
-            </FormGroup>
-          </div>
+          <FormGroup className="md:col-span-2" label="Abstract">
+            <textarea className="field" rows={3} value={form.abstract} onChange={F('abstract')} placeholder="Brief description..." style={{ resize:'vertical' }} />
+          </FormGroup>
         </div>
       </Modal>
 

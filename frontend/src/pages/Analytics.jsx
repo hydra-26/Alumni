@@ -6,6 +6,8 @@ import api from '../utils/api'
 import { logAudit } from '../utils/audit'
 import { Card, CardHead, SectionHead, StatBox, Sel, Modal } from '../components/ui'
 import { useToast } from '../context/ToastContext'
+import headerImg from '../assets/header.png'
+import footerImg from '../assets/footer.png'
 
 Chart.register(...registerables)
 Chart.defaults.font.family = "'Lexend', 'Noto Sans', 'Segoe UI', sans-serif"
@@ -24,9 +26,9 @@ export default function Analytics() {
   const [kpis, setKpis] = useState({ total_alumni: 0, total_projects: 0, employment_rate: 0, award_winning: 0, implemented_rate: 0 })
   const [exportOpen, setExportOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [exportSel, setExportSel] = useState({ metrics: true, radar: true, trend: true, awards: true, employment: true })
+  const [exportSel, setExportSel] = useState({ metrics: true, status: true, trend: true, awards: true, employment: true })
 
-  const radarRef = useRef(null)
+  const statusRef = useRef(null)
   const trendRef = useRef(null)
   const awardsRef = useRef(null)
   const employmentRef = useRef(null)
@@ -34,14 +36,14 @@ export default function Analytics() {
 
   // Export capture refs
   const refMetricsCard = useRef(null)
-  const refRadarCard = useRef(null)
+  const refStatusCard = useRef(null)
   const refTrendCard = useRef(null)
   const refAwardsCard = useRef(null)
   const refEmploymentCard = useRef(null)
 
   const exportItems = [
     { key: 'metrics', label: 'Key Metrics', ref: refMetricsCard },
-    { key: 'radar', label: 'Batch Radar Comparison', ref: refRadarCard },
+    { key: 'status', label: 'Project Status', ref: refStatusCard },
     { key: 'trend', label: 'Implementation Rate Trend', ref: refTrendCard },
     { key: 'awards', label: 'Awards by Project Category', ref: refAwardsCard },
     { key: 'employment', label: 'Employment Status', ref: refEmploymentCard },
@@ -105,8 +107,6 @@ export default function Analytics() {
     return out
   }, [batchYears, filteredProjects, filteredAlumni])
 
-  const selectedYears = batchFilter === 'all' ? batchYears : [batchFilter]
-
   const stats = useMemo(() => {
     const alumniTotal = filteredAlumni.length
     const projectsTotal = filteredProjects.length
@@ -130,6 +130,26 @@ export default function Analytics() {
   }, [filteredProjects])
 
   const trendValues = trendYears.map(y => perYear[y]?.implementedPct || 0)
+
+  const projectStatusData = useMemo(() => {
+    const statusOrder = ['Implemented', 'Awarded', 'In Progress', 'Proposed']
+    const counts = {}
+
+    for (const p of filteredProjects) {
+      const status = p.status || 'Unknown'
+      counts[status] = (counts[status] || 0) + 1
+    }
+
+    const labels = [
+      ...statusOrder.filter(status => counts[status]),
+      ...Object.keys(counts).filter(status => !statusOrder.includes(status)).sort(),
+    ]
+
+    return {
+      labels,
+      values: labels.map(label => counts[label]),
+    }
+  }, [filteredProjects])
 
   const awardByCategory = useMemo(() => {
     const counts = {}
@@ -166,32 +186,29 @@ export default function Analytics() {
       }
     }
 
-    if (radarRef.current) {
-      destroy('radar')
-      instances.current.radar = new Chart(radarRef.current, {
-        type: 'radar',
+    if (statusRef.current) {
+      destroy('status')
+      const statusColors = projectStatusData.labels.map((_, idx) => ['rgba(10,61,143,0.82)', 'rgba(212,168,0,0.82)', 'rgba(13,138,94,0.82)', 'rgba(107,63,160,0.82)', 'rgba(0,119,182,0.82)'][idx % 5])
+      instances.current.status = new Chart(statusRef.current, {
+        type: 'bar',
         data: {
-          labels: ['Employed %', 'Self-Employed %', 'Implemented %', 'Awarded %', 'Project Volume'],
-          datasets: selectedYears.map((y, idx) => ({
-            label: y,
-            data: [
-              perYear[y]?.employedPct || 0,
-              perYear[y]?.selfEmpPct || 0,
-              perYear[y]?.implementedPct || 0,
-              perYear[y]?.awardedPct || 0,
-              Math.min(100, (perYear[y]?.projectTotal || 0) * 10),
-            ],
-            borderColor: [PSU, GOLD, '#0d8a5e'][idx % 3],
-            backgroundColor: ['rgba(10,61,143,0.12)', 'rgba(212,168,0,0.10)', 'rgba(13,138,94,0.10)'][idx % 3],
-            pointBackgroundColor: [PSU, GOLD, '#0d8a5e'][idx % 3],
-            borderWidth: 2.2,
-          })),
+          labels: projectStatusData.labels,
+          datasets: [{
+            label: 'Projects',
+            data: projectStatusData.values,
+            backgroundColor: statusColors,
+            borderWidth: 0,
+            borderRadius: 5,
+          }],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          scales: { r: { ticks: { backdropColor: 'transparent', font: { size: 9 } }, grid: { color: 'rgba(214,224,245,0.6)' }, pointLabels: { font: { size: 10 }, color: '#3a5280' } } },
-          plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 12 } } },
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: GRID } },
+            y: { beginAtZero: true, grid: { color: GRID }, ticks: { precision: 0 } },
+          },
         },
       })
     }
@@ -220,13 +237,14 @@ export default function Analytics() {
 
     if (awardsRef.current) {
       destroy('awards')
+      const awardColors = awardByCategory.labels.map((_, idx) => [PSU, 'rgba(212,168,0,0.85)', 'rgba(13,138,94,0.85)', 'rgba(107,63,160,0.85)', 'rgba(0,119,182,0.85)'][idx % 5])
       instances.current.awards = new Chart(awardsRef.current, {
         type: 'bar',
         data: {
           labels: awardByCategory.labels,
-          datasets: [{ label: 'Awards', data: awardByCategory.values, backgroundColor: [PSU, 'rgba(212,168,0,0.85)', 'rgba(13,138,94,0.85)', 'rgba(107,63,160,0.85)', 'rgba(0,119,182,0.85)'], borderWidth: 0, borderRadius: 5 }],
+          datasets: [{ label: 'Awards', data: awardByCategory.values, backgroundColor: awardColors, borderWidth: 0, borderRadius: 5 }],
         },
-        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { grid: { color: GRID } }, y: { grid: { color: 'transparent' } } } },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: GRID } }, y: { beginAtZero: true, grid: { color: 'transparent' }, ticks: { precision: 0 } } } },
       })
     }
 
@@ -243,7 +261,7 @@ export default function Analytics() {
     }
 
     return () => Object.keys(instances.current).forEach(destroy)
-  }, [selectedYears, perYear, trendYears, trendValues, awardByCategory, employmentStatusData])
+  }, [perYear, trendYears, trendValues, projectStatusData, awardByCategory, employmentStatusData])
 
   const batchLabel = batchFilter === 'all' ? 'all batches' : `batch ${batchFilter}`
 
@@ -268,26 +286,109 @@ export default function Analytics() {
 
     setExporting(true)
     try {
+      const loadImage = (src) => new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve(img)
+        img.onerror = reject
+        img.src = src
+      })
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
       const pageWidth = pdf.internal.pageSize.getWidth()
       const pageHeight = pdf.internal.pageSize.getHeight()
       const margin = 36
+      const titleFontSize = 16
+      const mainFontSize = 13
+      const metaFontSize = 11
+      const lineGap = 6
+      const exportTitle = 'Analytics Report'
 
-      for (let i = 0; i < selected.length; i += 1) {
-        const node = selected[i].ref.current
-        const canvas = await html2canvas(node, { scale: 2, backgroundColor: '#ffffff' })
-        const imgData = canvas.toDataURL('image/png')
-        const maxWidth = pageWidth - margin * 2
-        const maxHeight = pageHeight - margin * 2
-        const ratio = Math.min(maxWidth / canvas.width, maxHeight / canvas.height)
-        const renderWidth = canvas.width * ratio
-        const renderHeight = canvas.height * ratio
-        const x = (pageWidth - renderWidth) / 2
-        const y = (pageHeight - renderHeight) / 2
+      const headerImage = await loadImage(headerImg).catch(() => null)
+      const footerImage = await loadImage(footerImg).catch(() => null)
+      const headerWidth = headerImage ? pageWidth : 0
+      const headerHeight = headerImage ? (headerImage.height / headerImage.width) * headerWidth : 0
+      const footerWidth = footerImage ? pageWidth : 0
+      const footerHeight = footerImage ? (footerImage.height / footerImage.width) * footerWidth : 0
+      const headerY = 0
+      const footerY = footerImage ? pageHeight - footerHeight : 0
 
-        if (i > 0) pdf.addPage()
-        pdf.addImage(imgData, 'PNG', x, y, renderWidth, renderHeight, undefined, 'FAST')
+      if (headerImage) {
+        pdf.addImage(headerImage, 'PNG', 0, headerY, headerWidth, headerHeight, undefined, 'FAST')
       }
+
+      if (footerImage) {
+        pdf.addImage(footerImage, 'PNG', 0, footerY, footerWidth, footerHeight, undefined, 'FAST')
+      }
+      let cursorY = margin + titleFontSize
+      if (headerImage) {
+        cursorY = headerY + headerHeight + 12 + titleFontSize
+      }
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(titleFontSize)
+      pdf.text(exportTitle, pageWidth / 2, cursorY, { align: 'center' })
+
+      cursorY += mainFontSize + lineGap
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(mainFontSize)
+      pdf.text('Performance Analytics', pageWidth / 2, cursorY, { align: 'center' })
+
+      cursorY += metaFontSize + lineGap
+      pdf.setFontSize(metaFontSize)
+      pdf.text(`Data for ${batchLabel}`, pageWidth / 2, cursorY, { align: 'center' })
+
+      const contentTop = cursorY + metaFontSize + lineGap
+      const contentBottom = footerImage ? footerY - 12 : pageHeight - margin
+      const contentHeight = contentBottom - contentTop
+      const gap = 12
+      const contentWidth = pageWidth - margin * 2
+      const metricsItem = selected.find(item => item.key === 'metrics')
+      const gridItems = selected.filter(item => item.key !== 'metrics')
+      const rows = []
+      let metricsCanvas = null
+
+      if (metricsItem) {
+        metricsCanvas = await html2canvas(metricsItem.ref.current, { scale: 2, backgroundColor: '#ffffff' })
+        rows.push({ canvases: [metricsCanvas], columnWidth: contentWidth })
+      }
+
+      if (gridItems.length) {
+        const gridColumns = gridItems.length <= 1 ? 1 : 2
+        const gridColumnWidth = (contentWidth - gap * (gridColumns - 1)) / gridColumns
+        const gridCanvases = []
+
+        for (const item of gridItems) {
+          const canvas = await html2canvas(item.ref.current, { scale: 2, backgroundColor: '#ffffff' })
+          gridCanvases.push(canvas)
+        }
+
+        for (let i = 0; i < gridCanvases.length; i += gridColumns) {
+          rows.push({ canvases: gridCanvases.slice(i, i + gridColumns), columnWidth: gridColumnWidth })
+        }
+      }
+
+      const rowHeights = rows.map(row => Math.max(...row.canvases.map(canvas => (canvas.height * row.columnWidth) / canvas.width)))
+      const totalHeight = rowHeights.reduce((acc, h) => acc + h, 0) + gap * Math.max(0, rows.length - 1)
+      const scale = totalHeight > contentHeight ? contentHeight / totalHeight : 1
+      const scaledGap = gap * scale
+
+      let currentY = contentTop
+      rows.forEach((row, rowIndex) => {
+        const actualColumns = row.canvases.length
+        const rowWidth = row.columnWidth * actualColumns + gap * Math.max(0, actualColumns - 1)
+        const scaledRowWidth = rowWidth * scale
+        const startX = (pageWidth - scaledRowWidth) / 2
+
+        row.canvases.forEach((canvas, colIndex) => {
+          const renderWidth = row.columnWidth * scale
+          const renderHeight = (canvas.height * row.columnWidth) / canvas.width * scale
+          const x = startX + colIndex * (renderWidth + scaledGap)
+          const y = currentY
+          const imgData = canvas.toDataURL('image/png')
+
+          pdf.addImage(imgData, 'PNG', x, y, renderWidth, renderHeight, undefined, 'FAST')
+        })
+
+        currentY += rowHeights[rowIndex] * scale + scaledGap
+      })
 
       pdf.save(`analytics-export-${Date.now()}.pdf`)
       setExportOpen(false)
@@ -395,10 +496,10 @@ export default function Analytics() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <div ref={refRadarCard}>
+        <div ref={refStatusCard}>
           <Card>
-            <CardHead title="Batch Radar Comparison" sub="Calculated from Supabase records" />
-            <div className="p-5"><div style={{ height: 280 }}><canvas ref={radarRef} /></div></div>
+            <CardHead title="Project Status" sub="Projects grouped by status" />
+            <div className="p-5"><div style={{ height: 280 }}><canvas ref={statusRef} /></div></div>
           </Card>
         </div>
         <div ref={refTrendCard}>
