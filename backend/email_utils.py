@@ -92,7 +92,7 @@ def send_user_credentials_email(*, to_email: str | None, name: str, username: st
         f"Hello {display_name},\n\n"
         "Your APPAS account has been created. You can sign in using the details below:\n\n"
         f"System link: https://alumni-blush-alpha.vercel.app/login\n"
-        f"Email: {login_id}\n"
+        f"Email: {to_email}\n"
         f"Password: {password or ''}\n\n"
         "If you did not expect this email, please ignore it."
     )
