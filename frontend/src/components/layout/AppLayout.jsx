@@ -47,14 +47,14 @@ const ADMIN_NAV = {
 }
 
 const PAGE_META = {
-  '/':          { name: 'Dashboard',        crumb: 'PSU · APPAS · Overview' },
-  '/analytics': { name: 'Analytics',         crumb: 'PSU · APPAS · Performance Analytics' },
-  '/alumni':    { name: 'Alumni Records',    crumb: 'PSU · APPAS · Records' },
-  '/projects':  { name: 'Projects',          crumb: 'PSU · APPAS · Records' },
-  '/upload':    { name: 'Upload Data',       crumb: 'PSU · APPAS · Data Tools' },
-  '/reports':   { name: 'Export Reports',    crumb: 'PSU · APPAS · Reports' },
-  '/users':     { name: 'User Management',   crumb: 'PSU · APPAS · Administration' },
-  '/system':    { name: 'User Activity Logs',  crumb: 'PSU · APPAS · Administration' },
+  '/':          { name: 'Dashboard',        crumb: 'PSU · AlumniTrack · Overview' },
+  '/analytics': { name: 'Analytics',        crumb: 'PSU · AlumniTrack · Performance Analytics' },
+  '/alumni':    { name: 'Alumni Records',   crumb: 'PSU · AlumniTrack · Records' },
+  '/projects':  { name: 'Projects',         crumb: 'PSU · AlumniTrack · Records' },
+  '/upload':    { name: 'Upload Data',      crumb: 'PSU · AlumniTrack · Data Tools' },
+  '/reports':   { name: 'Export Reports',   crumb: 'PSU · AlumniTrack · Reports' },
+  '/users':     { name: 'User Management',  crumb: 'PSU · AlumniTrack · Administration' },
+  '/system':    { name: 'User Activity Logs', crumb: 'PSU · AlumniTrack · Administration' },
 }
 
 export default function AppLayout() {
@@ -71,7 +71,7 @@ export default function AppLayout() {
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [changeForm, setChangeForm] = useState({ currentPassword: '', password: '', confirmPassword: '' })
-  const meta = PAGE_META[pathname] || { name: 'APPAS', crumb: 'PSU · APPAS' }
+  const meta = PAGE_META[pathname] || { name: 'AlumniTrack', crumb: 'PSU · AlumniTrack' }
   const initials = user ? (user.name.split(' ').map(n => n[0]).slice(0, 2).join('')) : 'U'
 
   const passwordChecks = PASSWORD_RULES.map(rule => ({ ...rule, passed: rule.test(changeForm.password) }))
@@ -200,7 +200,7 @@ export default function AppLayout() {
 
         {/* Brand */}
         <div className="px-5 py-5 border-b border-gold/10 flex items-center justify-center">
-          <img src={logoDash} alt="APPAS Logo" className="h-16 object-contain" />
+          <img src={logoDash} alt="AlumniTrack Logo" className="h-16 object-contain" />
         </div>
 
         {/* Navigation */}
